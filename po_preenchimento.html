@@ -69,6 +69,15 @@
       method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: todos })
     });
   }
+
+  /* ── SESSÃO (global) ── */
+  const STORAGE_SESSION_KEY = 'plataforma_po_sessao';
+  function getSessao(){
+    try {
+      const raw = localStorage.getItem(STORAGE_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch(e){ return null; }
+  }
 </script>
 <script>
   /* ── GUARD DE SESSÃO: primeiro script do <head> ── */
@@ -965,16 +974,7 @@ const SCHEMA = {
   }
 };
 
-/* =========================================================
-   SESSÃO
-   ========================================================= */
-const STORAGE_SESSION_KEY = 'plataforma_po_sessao';
-function getSessao(){
-  try {
-    const raw = localStorage.getItem(STORAGE_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch(e){ return null; }
-}
+/* sessao e getSessao definidos no bloco JSONBin (head) */
 const sessao = getSessao();
 if(!sessao){
   window.location.href = './login.html';
@@ -1567,7 +1567,7 @@ async function atualizarBotaoEnviar(){
 }
 atualizarBotaoEnviar();
 
-enviarBtn.addEventListener('click', () => {
+enviarBtn.addEventListener('click', async () => {
   if(!programa) return;
   salvarTudo(true);
   const s = programa.status || 'draft';
@@ -2224,7 +2224,7 @@ function fecharModalParecerAdmin() {
   document.getElementById('overlayParecerAdmin').classList.remove('open');
 }
 
-function registrarParecerAdmin(tipo) {
+async function registrarParecerAdmin(tipo) {
   const p = programa;
   if (!p) return;
 
