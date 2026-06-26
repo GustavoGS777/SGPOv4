@@ -1,0 +1,2401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script>
+  /* ── JSONBIN CONFIG ── */
+  const JSONBIN_API_KEY = "$2a$10$Wm38/lGALLta4chHp7NwVOb31uBXGpV0T9SSHg0m4nIk8mgZZptRu";
+  const BIN_PROGRAMAS  = "6a3e73bdda38895dfe02a10b";
+  const BIN_PO_DADOS   = "6a3e73a9da38895dfe02a0a1";
+  const JSONBIN_BASE   = "https://api.jsonbin.io/v3/b";
+  const JB_HEADERS     = { "Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY };
+
+  /* ── PROGRAMAS ── */
+  async function loadProgramas() {
+    try {
+      const r = await fetch(`${JSONBIN_BASE}/${BIN_PROGRAMAS}/latest`, { headers: JB_HEADERS });
+      const j = await r.json();
+      return j.record?.dados || [];
+    } catch(e) { console.error('loadProgramas:', e); return []; }
+  }
+  async function saveProgramas(lista) {
+    await fetch(`${JSONBIN_BASE}/${BIN_PROGRAMAS}`, {
+      method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: lista })
+    });
+  }
+  async function addPrograma(programa) {
+    const lista = await loadProgramas();
+    lista.push(programa);
+    await saveProgramas(lista);
+  }
+  async function updateProgramaFS(id, changes) {
+    const lista = await loadProgramas();
+    const idx = lista.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    Object.assign(lista[idx], changes);
+    await saveProgramas(lista);
+  }
+  async function deleteProgramaFS(id) {
+    const lista = await loadProgramas();
+    await saveProgramas(lista.filter(p => p.id !== id));
+  }
+
+  /* ── PO_DADOS ── */
+  async function _loadTodosDados() {
+    try {
+      const r = await fetch(`${JSONBIN_BASE}/${BIN_PO_DADOS}/latest`, { headers: JB_HEADERS });
+      const j = await r.json();
+      return j.record?.dados || {};
+    } catch(e) { return {}; }
+  }
+  async function loadDadosFS(poId) {
+    if (!poId) return {};
+    const todos = await _loadTodosDados();
+    return todos[poId] || {};
+  }
+  async function saveDadosFS(poId, dados) {
+    if (!poId) return;
+    const todos = await _loadTodosDados();
+    todos[poId] = dados;
+    await fetch(`${JSONBIN_BASE}/${BIN_PO_DADOS}`, {
+      method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: todos })
+    });
+  }
+</script>
+<script>
+  /* ── GUARD DE SESSÃO: primeiro script do <head> ── */
+  (function(){
+    try {
+      var raw = localStorage.getItem('plataforma_po_sessao');
+      var s = raw ? JSON.parse(raw) : null;
+      if (!s) { window.location.replace('./login.html'); document.documentElement.style.display='none'; return; }
+      if (s.loginAt && (Date.now() - s.loginAt) > 8*3600*1000) {
+        localStorage.removeItem('plataforma_po_sessao');
+        window.location.replace('./login.html'); document.documentElement.style.display='none'; return;
+      }
+      var ok=['admin','agente','analista_ap']; if(ok.indexOf(s.perfil)===-1){window.location.replace('./login.html');document.documentElement.style.display='none';return;}
+    } catch(e) { window.location.replace('./login.html'); document.documentElement.style.display='none'; }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Programa de Obras — ENBPar</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B2545;--navy2:#163B6E;--navy3:#1E4D8C;
+  --primary:#0B82C6;--primary2:#096fa8;--primary-lt:#EFF6FF;--primary-mid:#DBEAFE;
+  --accent:#A5C715;--accent2:#8aaa0f;--accent-lt:#F7FEE7;
+  --red:#DC2626;--red-lt:#FEF2F2;--red-mid:#FECACA;
+  --ok:#16a34a;--ok-lt:#f0fdf4;
+  --warn:#d97706;--warn-lt:#fffbeb;
+  --blue:#2563EB;--blue-lt:#EFF6FF;
+  --surf:#F7F8FB;--surf2:#F0F2F6;--surf3:#EEF1F6;
+  --bdr:#E2E6EC;--bdr2:#C5CDD8;
+  --txt:#111827;--txt2:#4B5563;--txt3:#9CA3AF;
+  --r:8px;--rlg:12px;--rxl:16px;
+}
+body{font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:var(--txt);background:var(--surf3);min-height:100vh;line-height:1.5}
+
+/* ── TOP ADMIN BAR ── */
+.admin-bar{
+  background:var(--navy);padding:8px 28px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:300;box-shadow:0 2px 8px rgba(0,0,0,.2);
+}
+.admin-bar-left{display:flex;align-items:center;gap:12px}
+.admin-bar-back{
+  display:inline-flex;align-items:center;gap:7px;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+  color:#fff;text-decoration:none;padding:6px 14px;border-radius:7px;
+  font-size:12.5px;font-weight:500;transition:all .15s;cursor:pointer;
+}
+.admin-bar-back:hover{background:rgba(255,255,255,.18)}
+.admin-bar-code{color:rgba(255,255,255,.4);font-size:12px;font-family:'IBM Plex Mono',monospace}
+.admin-bar-right{display:flex;align-items:center;gap:10px}
+.admin-bar-user{font-size:11px;color:rgba(255,255,255,.45)}
+.admin-bar-logout{
+  display:inline-flex;align-items:center;gap:5px;
+  background:rgba(220,38,38,.2);border:1px solid rgba(220,38,38,.3);
+  color:#FCA5A5;text-decoration:none;padding:5px 12px;border-radius:7px;
+  font-size:12px;font-weight:500;cursor:pointer;
+}
+
+/* ── WF STATUS BAR ── */
+.wf-bar{
+  background:linear-gradient(180deg,#0D2D50 0%,#0B2545 100%);
+  border-bottom:3px solid var(--accent);
+  padding:14px 28px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+}
+.wf-bar-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,.35);margin-bottom:8px}
+.wf-steps{display:flex;align-items:stretch;gap:0;flex:1;max-width:580px}
+.wf-step{display:flex;align-items:center;gap:0;position:relative;flex:1}
+.wf-step-inner{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;padding:0 4px}
+.wf-step-icon{
+  width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;
+  border:2px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);
+  color:rgba(255,255,255,.3);transition:all .3s;
+}
+.wf-step-label{font-size:10.5px;font-weight:600;color:rgba(255,255,255,.35);text-align:center;white-space:nowrap;transition:color .3s}
+.wf-connector{flex-shrink:0;height:2px;width:40px;margin-top:-14px;background:rgba(255,255,255,.1);border-radius:1px;align-self:center;position:relative;top:-6px}
+.wf-connector.done{background:var(--accent)}
+.wf-step.done .wf-step-icon{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 0 4px rgba(165,199,21,.15)}
+.wf-step.done .wf-step-label{color:rgba(255,255,255,.75)}
+.wf-step.active .wf-step-icon{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 0 0 5px rgba(11,130,198,.25);animation:pulse-icon 2s infinite}
+.wf-step.active .wf-step-label{color:#fff;font-size:11.5px}
+.wf-step.st-returned .wf-step-icon{background:#f97316;border-color:#f97316;color:#fff}
+.wf-step.st-returned .wf-step-label{color:#FED7AA}
+.wf-step.st-approved .wf-step-icon{background:#22c55e;border-color:#22c55e;color:#fff}
+.wf-step.st-approved .wf-step-label{color:#86EFAC}
+@keyframes pulse-icon{0%,100%{box-shadow:0 0 0 5px rgba(11,130,198,.25)}50%{box-shadow:0 0 0 8px rgba(11,130,198,.12)}}
+
+.wf-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0}
+.wf-status-badge.wsb-ap-approved{background:rgba(139,92,246,.15);border:1.5px solid rgba(139,92,246,.4);color:#C4B5FD}
+.wf-step-badge{font-size:8px;font-weight:800;padding:1px 4px;border-radius:4px;position:absolute;top:-4px;right:-6px;letter-spacing:.3px}
+.wf-badge-ap{background:#6D28D9;color:#fff}
+.wf-badge-at{background:#0B82C6;color:#fff}
+.wf-step-icon{position:relative}
+.wsb-draft{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18);color:rgba(255,255,255,.75)}
+.wsb-review{background:rgba(11,130,198,.2);border-color:rgba(11,130,198,.5);color:#93C5FD}
+.wsb-approved{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.4);color:#86EFAC}
+.wsb-returned{background:rgba(249,115,22,.15);border-color:rgba(249,115,22,.4);color:#FED7AA}
+.parecer-notif-wrap{display:flex;align-items:center}
+
+/* ── HEADER ── */
+.hdr{background:var(--navy);color:#fff;position:sticky;top:44px;z-index:200;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+.hdr-top{max-width:1200px;margin:0 auto;padding:12px 28px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hdr-brand{display:flex;align-items:center;gap:12px}
+.hdr-logos{display:flex;align-items:center;gap:10px;background:#fff;border-radius:10px;padding:7px 14px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.hdr-logo-img{height:44px;width:auto;display:block}
+.hdr-logo-div{width:1.5px;height:34px;background:#ddd}
+.hdr-info{}
+.hdr-programa{font-size:16px;font-weight:600;letter-spacing:-.3px;display:flex;align-items:center;gap:8px}
+.hdr-prog-val{color:#fff;font-size:16px;font-weight:600}
+.hdr-sub{font-size:12px;opacity:.6;margin-top:2px;font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;gap:8px}
+.hdr-badges{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.hdr-badge{font-size:11px;padding:4px 10px;border-radius:20px;font-weight:500;white-space:nowrap}
+.hdr-badge-blue{background:rgba(11,130,198,.2);border:1px solid rgba(11,130,198,.4);color:#BFDBFE}
+.hdr-badge-green{background:rgba(165,199,21,.15);border:1px solid rgba(165,199,21,.3);color:#d9f99d}
+
+/* ── TABS BAR ── */
+.tabs-wrap{background:var(--navy2);border-top:1px solid rgba(255,255,255,.08)}
+.tabs-inner{
+  max-width:1200px;margin:0 auto;padding:0 28px;
+  display:flex;align-items:stretch;overflow-x:auto;scrollbar-width:none;gap:0;
+}
+.tabs-inner::-webkit-scrollbar{display:none}
+
+/* Legacy classes for JS compat */
+#sheetTabs{display:contents} /* children render directly */
+.tab-group{display:contents}
+.tab-group-label{
+  display:none; /* hidden — groups shown as tab dividers instead */
+}
+
+/* Tab group header shown as a thin section label */
+.tabs-group-sep{
+  display:flex;align-items:center;padding:0 4px;
+  border-right:1px solid rgba(255,255,255,.12);margin:6px 0;
+}
+.tabs-group-sep span{
+  font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;
+  color:rgba(255,255,255,.22);writing-mode:horizontal-tb;white-space:nowrap;
+  padding:0 6px;
+}
+
+.sheet-tab{
+  padding:10px 14px;border:none;background:transparent;
+  color:rgba(255,255,255,.5);font-family:'IBM Plex Sans',sans-serif;
+  font-size:12px;font-weight:500;cursor:pointer;
+  border-bottom:2px solid transparent;white-space:nowrap;
+  transition:color .15s,border-color .15s;
+  display:flex;align-items:center;gap:5px;position:relative;
+}
+.sheet-tab:hover{color:rgba(255,255,255,.82)}
+.sheet-tab.active{color:#fff;border-bottom-color:var(--accent)}
+.sheet-tab .check{
+  width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.25);
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:9px;flex-shrink:0;transition:all .2s;
+}
+.sheet-tab.filled .check{background:var(--accent);border-color:var(--accent);color:var(--navy)}
+.sheet-tab.filled .check::after{content:'✓'}
+.sheet-tab .ref{font-size:9.5px;opacity:.45;font-family:'IBM Plex Mono',monospace;margin-left:2px}
+
+/* ── MAIN ── */
+.main{max-width:1200px;margin:0 auto;padding:24px 28px 100px}
+
+/* ── SECTION CARD ── */
+.section-card{display:none}
+.section-card.active{display:block}
+
+.ref-tag{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:10.5px;font-weight:700;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.5px;
+  font-family:'IBM Plex Mono',monospace;
+  background:var(--surf2);border:1px solid var(--bdr);
+  padding:3px 10px;border-radius:20px;margin-bottom:12px;
+}
+.section-card h3{
+  font-size:19px;font-weight:700;color:var(--navy);margin-bottom:8px;
+}
+.section-card p.desc{
+  font-size:13px;color:var(--txt2);line-height:1.65;margin-bottom:20px;
+  padding:12px 16px;background:var(--blue-lt);border:1px solid #BFDBFE;
+  border-radius:var(--r);
+}
+.ref-note{
+  font-size:11.5px;color:var(--txt3);margin-top:6px;padding:8px 12px;
+  background:var(--surf2);border-radius:var(--r);border-left:3px solid var(--bdr2);
+}
+
+/* ── FORM GRID ── */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:4px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px}
+.field input,.field select,.field textarea{
+  width:100%;padding:8px 11px;border:1px solid var(--bdr2);border-radius:var(--r);
+  font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:var(--txt);
+  background:#fff;transition:border-color .15s,box-shadow .15s;outline:none;
+}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:var(--accent);box-shadow:0 0 0 3px rgba(11,130,198,.12);
+}
+.field input[readonly]{background:var(--surf2);color:var(--txt2);font-family:'IBM Plex Mono',monospace;font-size:12px}
+.field textarea{resize:vertical;min-height:72px;line-height:1.5}
+.calc-badge{
+  display:inline-flex;align-items:center;background:#EFF6FF;
+  color:var(--primary2);font-size:10px;font-weight:700;
+  padding:1px 7px;border-radius:10px;margin-left:6px;
+  text-transform:none;letter-spacing:0;
+}
+.hint{font-size:11.5px;color:var(--txt3);margin-top:3px}
+
+/* ── TABLE EDITOR ── */
+.table-editor-wrap{overflow-x:auto;margin-bottom:12px;border:1px solid var(--bdr);border-radius:var(--rlg);overflow:hidden}
+table.editor{width:100%;border-collapse:collapse;font-size:12.5px;min-width:500px}
+table.editor thead tr{background:var(--navy)}
+table.editor th{
+  padding:9px 12px;font-size:11px;font-weight:600;
+  color:rgba(255,255,255,.85);text-align:left;white-space:nowrap;
+  letter-spacing:.3px;border:1px solid rgba(255,255,255,.1);
+}
+table.editor td{
+  border:1px solid var(--bdr);padding:4px 6px;
+  background:#fff;vertical-align:middle;
+}
+table.editor tbody tr:hover td{background:#F0F7FF}
+table.editor input,table.editor select{
+  border:none;border-radius:0;padding:5px 7px;font-size:12.5px;
+  box-shadow:none;background:transparent;width:100%;
+  font-family:'IBM Plex Sans',sans-serif;
+}
+table.editor input:focus,table.editor select:focus{
+  background:#EFF6FF;border-bottom:1.5px solid var(--accent);box-shadow:none;
+}
+.table-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.small-note{font-size:11px;color:var(--txt3);margin-top:6px}
+
+/* ── BUTTONS ── */
+.btn{
+  padding:7px 14px;border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;
+  font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid;
+  transition:all .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+}
+.btn-ghost{background:#fff;border-color:var(--bdr2);color:var(--txt2)}
+.btn-ghost:hover{background:var(--surf2)}
+.btn-primary{background:var(--primary);border-color:var(--primary2);color:#fff}
+.btn-primary:hover{background:var(--primary2)}
+.btn-accent{background:var(--accent);border-color:var(--accent2);color:var(--navy)}
+.btn-accent:hover{background:var(--accent2)}
+
+/* ── CRONOGRAMA ── */
+.cron-wrap{overflow-x:auto;margin-bottom:12px}
+.cron{width:100%;border-collapse:collapse;font-size:12px;min-width:500px}
+.cron th{background:var(--navy);color:#fff;padding:8px 10px;font-size:11px;font-weight:500;border:1px solid rgba(255,255,255,.1);text-align:center;white-space:nowrap}
+.cron td{border:1px solid var(--bdr);padding:5px 7px;background:#fff;vertical-align:middle}
+.cron td.activity{font-weight:600;background:var(--surf2);white-space:nowrap;padding:6px 10px}
+.cron td.activity.sub{font-weight:400;color:var(--txt2);padding-left:22px}
+.cron td input{border:none;border-radius:0;padding:4px 6px;font-size:11px;box-shadow:none;background:transparent;width:100%;text-align:center}
+.cron td input:focus{background:#EFF6FF;box-shadow:none}
+
+/* ── MAPA ── */
+.map-placeholder{
+  background:var(--surf2);border:2px dashed var(--bdr2);border-radius:var(--rlg);
+  height:340px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;color:var(--txt2);
+}
+.map-placeholder .icon{font-size:40px;opacity:.35}
+
+/* ── FOOTER NAV ── */
+.footer-nav{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:16px 0;margin-top:24px;border-top:1px solid var(--bdr);
+}
+.footer-nav .nav-info{font-size:13px;color:var(--txt3)}
+#navInfo{color:var(--txt2);font-weight:500}
+
+/* ── PROGRESS BAR ── */
+.prog-wrap{background:var(--bdr);border-radius:4px;height:4px;overflow:hidden}
+.prog-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .3s}
+
+/* ── SAVE BAR ── */
+.sbar{
+  position:fixed;bottom:0;left:0;right:0;background:#fff;
+  border-top:1px solid var(--bdr);padding:12px 28px;
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  box-shadow:0 -4px 16px rgba(0,0,0,.08);z-index:100;
+}
+.sbar-left{display:flex;align-items:center;gap:16px}
+.sbar-status{font-size:13px;color:var(--txt2);display:flex;align-items:center;gap:6px}
+.sbar-status.ok{color:var(--ok)}
+.sbar-progress{display:flex;align-items:center;gap:8px}
+.sbar-pct{font-size:12px;font-weight:700;color:var(--navy);font-family:'IBM Plex Mono',monospace}
+.sbar-progbar{width:120px;height:5px;background:var(--bdr);border-radius:3px;overflow:hidden}
+.sbar-progbar-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .3s}
+.sbar-right{display:flex;gap:8px;align-items:center}
+
+/* Agent submit bar */
+.agent-sbar{
+  display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;
+  background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);
+  border-top:3px solid var(--primary);padding:14px 28px;
+  box-shadow:0 -4px 24px rgba(11,37,69,.4);
+}
+.agent-sbar-inner{
+  max-width:1200px;margin:0 auto;display:flex;align-items:center;
+  justify-content:space-between;gap:20px;flex-wrap:wrap;
+}
+.agent-sbar-info{display:flex;align-items:center;gap:12px}
+.agent-sbar-icon{
+  width:40px;height:40px;background:rgba(11,130,198,.25);
+  border:2px solid rgba(11,130,198,.4);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+}
+.agent-sbar-title{font-size:14px;font-weight:700;color:#fff}
+.agent-sbar-sub{font-size:12px;color:rgba(255,255,255,.55)}
+.agent-sbar-actions{display:flex;align-items:center;gap:10px}
+.agent-sbar-save{
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+  color:#fff;padding:9px 18px;border-radius:8px;font-family:'IBM Plex Sans',sans-serif;
+  font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;
+}
+.agent-sbar-save:hover{background:rgba(255,255,255,.18)}
+.agent-sbar-status{font-size:12.5px;color:rgba(255,255,255,.5)}
+#enviarAnaliseBtn{
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  border:none;color:#fff;padding:12px 28px;border-radius:10px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;
+  cursor:pointer;box-shadow:0 4px 16px rgba(11,130,198,.5);
+  transition:all .2s;letter-spacing:.3px;display:flex;align-items:center;gap:8px;
+}
+#enviarAnaliseBtn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(11,130,198,.6)}
+#enviarAnaliseBtn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
+/* ── NOTIF PARECER (botão na wf-bar) ── */
+.parecer-notif{
+  display:inline-flex;align-items:center;gap:8px;padding:7px 14px;
+  border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;
+  border:none;font-family:'IBM Plex Sans',sans-serif;transition:all .15s;
+}
+.parecer-notif.tipo-revisao{background:rgba(217,119,6,.15);border:1px solid rgba(217,119,6,.4);color:#FED7AA}
+.parecer-notif.tipo-revisao:hover{background:rgba(217,119,6,.25)}
+.parecer-notif.tipo-aprovado{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:#86EFAC}
+.parecer-notif.tipo-aprovado:hover{background:rgba(34,197,94,.25)}
+.parecer-notif-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;animation:pulse-dot 2s infinite}
+.tipo-revisao .parecer-notif-dot{background:#f97316}
+.tipo-aprovado .parecer-notif-dot{background:#22c55e}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+
+/* ── DOCUMENTO DE PARECER ── */
+.parecer-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(11,18,34,.6);backdrop-filter:blur(3px);
+  z-index:500;align-items:center;justify-content:center;padding:24px;
+}
+.parecer-overlay.open{display:flex}
+.parecer-doc{
+  background:#fff;border-radius:16px;width:100%;max-width:620px;
+  max-height:90vh;overflow-y:auto;
+  box-shadow:0 24px 64px rgba(0,0,0,.28),0 4px 16px rgba(0,0,0,.12);
+  display:flex;flex-direction:column;
+}
+.parecer-doc-header{padding:26px 30px 18px;border-bottom:2px solid #f0f0f0}
+.parecer-doc-header-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.parecer-doc-marca{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--primary);margin-bottom:6px}
+.parecer-doc-titulo{font-size:19px;font-weight:700;color:#1a1a2e;line-height:1.3}
+.parecer-doc-subtitulo{font-size:13px;color:#666;margin-top:2px}
+.parecer-doc-close{background:none;border:none;font-size:22px;cursor:pointer;color:#999;padding:0;line-height:1;flex-shrink:0}
+.parecer-doc-close:hover{color:#333}
+.parecer-doc-ficha{margin:18px 30px 0;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden}
+.parecer-doc-ficha table{width:100%;border-collapse:collapse}
+.parecer-doc-ficha td{padding:8px 13px;font-size:13px;border-bottom:1px solid #f0f0f0}
+.parecer-doc-ficha td:first-child{font-weight:600;color:#666;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;width:38%;background:#fafafa}
+.parecer-doc-ficha td:last-child{color:#1a1a2e}
+.parecer-doc-ficha tr:last-child td{border-bottom:none}
+.parecer-doc-body{padding:22px 30px;flex:1}
+.parecer-entry{margin-bottom:18px;padding-bottom:18px;border-bottom:1px dashed #e8e8e8}
+.parecer-entry:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.parecer-entry-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px}
+.parecer-entry-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap}
+.parecer-entry-badge.revisao{background:rgba(217,119,6,.1);color:#92400e;border:1px solid rgba(217,119,6,.35)}
+.parecer-entry-badge.aprovado{background:rgba(22,163,74,.1);color:#14532d;border:1px solid rgba(22,163,74,.35)}
+.parecer-entry-date{font-size:11.5px;color:#999;text-align:right;line-height:1.4}
+.parecer-entry-autor{font-size:12px;font-weight:600;color:#555;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.parecer-entry-autor::before{content:'';display:block;width:20px;height:1px;background:#ccc}
+.parecer-entry-text{font-size:14px;color:#2c2c2c;line-height:1.75;padding:13px 15px;background:#fafafa;border-radius:8px;border-left:3px solid}
+.parecer-entry-text.revisao{border-left-color:#d97706}
+.parecer-entry-text.aprovado{border-left-color:#16a34a}
+.parecer-doc-footer{padding:14px 30px 18px;border-top:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#aaa;gap:12px}
+.btn-parecer-fechar{padding:9px 20px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#555;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .15s}
+.btn-parecer-fechar:hover{background:#f5f5f5;border-color:#bbb}
+
+/* Botão encaminhar para AT (Admin, após AP aprovada) */
+.wf-btn-encaminhar{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:8px 16px;border-radius:8px;
+  background:rgba(139,92,246,.2);border:1.5px solid rgba(139,92,246,.5);
+  color:#C4B5FD;font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;font-weight:600;
+  cursor:pointer;transition:all .18s;white-space:nowrap;
+}
+.wf-btn-encaminhar:hover{background:rgba(139,92,246,.35);color:#fff}
+.wf-btn-parecer{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:9px 18px;border-radius:8px;
+  background:var(--accent);border:none;
+  color:var(--navy);font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:700;
+  cursor:pointer;transition:all .18s;white-space:nowrap;
+  box-shadow:0 2px 8px rgba(165,199,21,.35);letter-spacing:.2px;
+}
+.wf-btn-parecer:hover{background:var(--accent2);box-shadow:0 4px 12px rgba(165,199,21,.45);transform:translateY(-1px)}
+
+/* ── MODAL PARECER (Admin) ── */
+.overlay-parecer{
+  position:fixed;inset:0;background:rgba(11,18,34,.65);backdrop-filter:blur(4px);
+  z-index:600;display:none;align-items:center;justify-content:center;padding:24px;
+}
+.overlay-parecer.open{display:flex}
+.parecer-shell{
+  background:#fff;border-radius:18px;width:100%;max-width:880px;
+  max-height:90vh;overflow:hidden;
+  box-shadow:0 32px 80px rgba(0,0,0,.32),0 8px 24px rgba(0,0,0,.14);
+  display:flex;flex-direction:column;
+}
+.parecer-shell-hdr{
+  background:linear-gradient(135deg,#0B2545 0%,#163B6E 100%);
+  padding:18px 26px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0;
+}
+.parecer-shell-label{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:3px}
+.parecer-shell-title{font-size:17px;font-weight:700;color:#fff}
+.parecer-shell-subtitle{font-size:12px;color:rgba(255,255,255,.5);margin-top:2px}
+.parecer-shell-close{
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+  color:rgba(255,255,255,.7);font-size:18px;cursor:pointer;
+  width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:all .15s;padding:0;font-family:inherit;
+}
+.parecer-shell-close:hover{background:rgba(220,38,38,.4);color:#fff}
+.parecer-po-strip{display:flex;gap:0;border-bottom:1px solid #E2E6EC;flex-shrink:0;background:#F7F8FB}
+.parecer-po-item{padding:10px 18px;border-right:1px solid #E2E6EC;flex:1}
+.parecer-po-item:last-child{border-right:none}
+.parecer-po-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:2px}
+.parecer-po-val{font-size:13px;font-weight:600;color:#111827}
+.parecer-steps-bar{
+  display:flex;align-items:center;padding:12px 26px;border-bottom:1px solid #E2E6EC;
+  background:#fff;flex-shrink:0;overflow-x:auto;gap:0;
+}
+.parecer-wf-step{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.parecer-wf-dot{
+  width:26px;height:26px;border-radius:50%;border:2px solid #C5CDD8;
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+  color:#9CA3AF;background:#fff;flex-shrink:0;transition:all .2s;font-weight:700;
+}
+.parecer-wf-dot.p-done{background:#16a34a;border-color:#16a34a;color:#fff}
+.parecer-wf-dot.p-active{background:#0B82C6;border-color:#0B82C6;color:#fff;box-shadow:0 0 0 4px rgba(11,130,198,.15)}
+.parecer-wf-dot.p-warn{background:#d97706;border-color:#d97706;color:#fff}
+.parecer-wf-dot.p-ok{background:#16a34a;border-color:#16a34a;color:#fff}
+.parecer-wf-lbl{font-size:11.5px;font-weight:600;color:#9CA3AF}
+.parecer-wf-lbl.p-active{color:#0B82C6}
+.parecer-wf-lbl.p-done{color:#16a34a}
+.parecer-wf-lbl.p-warn{color:#d97706}
+.parecer-wf-conn{width:28px;height:2px;background:#E2E6EC;flex-shrink:0;margin:0 2px}
+.parecer-wf-conn.p-done{background:#16a34a}
+.parecer-body-wrap{display:flex;flex:1;overflow:hidden;min-height:0}
+.parecer-hist-col{width:260px;flex-shrink:0;border-right:1px solid #E2E6EC;overflow-y:auto;padding:14px;background:#F7F8FB}
+.parecer-hist-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.parecer-hist-empty{text-align:center;padding:24px 10px;color:#9CA3AF;font-size:12px;background:#fff;border-radius:8px;border:1px solid #E2E6EC}
+.ph-item{border-radius:9px;padding:11px 13px;margin-bottom:9px;border:1px solid;font-size:12px;line-height:1.55}
+.ph-item.revisao{background:rgba(217,119,6,.05);border-color:rgba(217,119,6,.22)}
+.ph-item.aprovado{background:rgba(22,163,74,.05);border-color:rgba(22,163,74,.22)}
+.ph-badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:6px}
+.ph-badge.revisao{background:rgba(217,119,6,.1);color:#92400e;border:1px solid rgba(217,119,6,.3)}
+.ph-badge.aprovado{background:rgba(22,163,74,.1);color:#14532d;border:1px solid rgba(22,163,74,.3)}
+.ph-text{color:#111827;margin-bottom:5px;font-size:12px}
+.ph-meta{font-size:10.5px;color:#9CA3AF}
+.parecer-form-col{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px}
+.parecer-field-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#4B5563;margin-bottom:6px}
+#parecerTexto{
+  width:100%;min-height:130px;padding:13px 15px;
+  border:2px solid #E2E6EC;border-radius:10px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;color:#111827;
+  line-height:1.65;outline:none;resize:vertical;transition:border-color .15s,box-shadow .15s;
+  background:#fff;display:block;
+}
+#parecerTexto:focus{border-color:#0B82C6;box-shadow:0 0 0 4px rgba(11,130,198,.1)}
+#parecerTexto.ptxt-error{border-color:#DC2626;box-shadow:0 0 0 4px rgba(220,38,38,.08)}
+.parecer-err-msg{display:none;color:#DC2626;font-size:12px;font-weight:600;background:#FEF2F2;border:1px solid #FECACA;border-radius:7px;padding:8px 12px;align-items:center;gap:6px;margin-top:6px}
+.parecer-err-msg.show{display:flex}
+.pac-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pac{border:2px solid #E2E6EC;border-radius:11px;padding:14px;cursor:pointer;transition:all .18s;background:#fff;text-align:left;font-family:inherit;width:100%}
+.pac:hover{transform:translateY(-2px)}
+.pac.pac-warn:hover{border-color:#d97706;background:#fffbeb}
+.pac.pac-ok:hover{border-color:#16a34a;background:#f0fdf4}
+.pac-ico{font-size:22px;margin-bottom:6px;display:block}
+.pac-name{font-size:13.5px;font-weight:700;color:#111827;margin-bottom:2px}
+.pac-desc{font-size:11.5px;color:#4B5563;line-height:1.4}
+.parecer-ftr{padding:12px 24px;border-top:1px solid #E2E6EC;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;flex-shrink:0}
+.parecer-ftr-note{font-size:11.5px;color:#9CA3AF}
+.btn-ftr-cancel{background:#fff;border:1px solid #C5CDD8;color:#4B5563;padding:8px 16px;border-radius:7px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-ftr-cancel:hover{background:#F7F8FB}
+
+@media(max-width:768px){
+  .main{padding:16px 16px 100px}
+  .hdr-top,.admin-bar{padding:8px 14px}
+  .tabs-inner{padding:0 10px}
+  .form-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ADMIN/TOPBAR -->
+<div class="admin-bar">
+  <div class="admin-bar-left">
+    <a href="dashboard_programas_obras.html" class="admin-bar-back">← Dashboard</a>
+    <span class="admin-bar-code" id="poCode">PO-2026-001</span>
+  </div>
+  <div class="admin-bar-right">
+    <span class="admin-bar-user" id="adminBarUser">Carregando…</span>
+    <a href="login.html" class="admin-bar-logout" id="adminBarLogout">🚪 Sair</a>
+  </div>
+</div>
+
+<!-- WF STATUS BAR -->
+<div class="wf-bar">
+  <div>
+    <div class="wf-bar-label">Status do Programa de Obras</div>
+    <div class="wf-steps" id="wfSteps"><!-- JS --></div>
+  </div>
+  <div class="wf-right">
+    <span class="wf-status-badge wsb-draft" id="wfBadge">✏ Rascunho</span>
+    <div id="parecerNotifWrap" class="parecer-notif-wrap"></div>
+    <button class="wf-btn-parecer" id="btnRegistrarParecer" style="display:none" onclick="abrirModalParecer()">
+      📋 Registrar Parecer
+    </button>
+    <button class="wf-btn-encaminhar" id="btnEncaminharAT" style="display:none" onclick="encaminharParaAT()">
+      🔄 Encaminhar para Análise Técnica
+    </button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-top">
+    <div class="hdr-brand">
+      <div class="hdr-logos">
+        
+        <div class="hdr-logo-div"></div>
+        
+      </div>
+      <div class="hdr-info">
+        <div class="hdr-programa">
+          <span class="hdr-prog-val" id="poName">Programa de Obras</span>
+        </div>
+        <div class="hdr-sub">
+          <span id="poAgente">—</span>
+          <span style="opacity:.4">·</span>
+          <span id="poData">—</span>
+          <span style="opacity:.4">·</span>
+          Status: <strong id="poStatus" style="color:#d9f99d">Rascunho</strong>
+          <span style="opacity:.4" id="analistaApSep">·</span>
+          <span id="analistaApInfo" style="display:none">🔎 Analista AP: <strong id="analistaApNome" style="color:#C4B5FD"></strong></span>
+        </div>
+      </div>
+    </div>
+    <div class="hdr-badges">
+      <span class="hdr-badge hdr-badge-blue" id="poModelTag">RDR</span>
+      <span class="hdr-badge hdr-badge-green">ENBPar / LpT</span>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs-wrap">
+    <div class="tabs-inner">
+      <div id="sheetTabs"></div>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+  <div id="mainContent">
+    <div class="footer-nav">
+      <button class="btn btn-ghost" id="prevTabBtn">← Anterior</button>
+      <span class="nav-info"><span id="navInfo">Carregando…</span></span>
+      <button class="btn btn-ghost" id="nextTabBtn">Próxima →</button>
+    </div>
+  </div>
+</main>
+
+<!-- elementos ocultos para compatibilidade JS -->
+<span id="overallPct" style="display:none"></span>
+<div id="overallBar" style="display:none"></div>
+<!-- SAVE BAR (Admin) -->
+<div class="sbar" id="sbar">
+  <div class="sbar-left">
+    <div class="sbar-status" id="saveStatus">📝 Formulário em edição</div>
+  </div>
+  <div class="sbar-right">
+    <button class="btn btn-ghost" id="saveBtn">💾 Salvar rascunho</button>
+  </div>
+</div>
+
+<!-- SAVE BAR (Agente) -->
+<div class="agent-sbar" id="agentSbar">
+  <div class="agent-sbar-inner">
+    <div class="agent-sbar-info">
+      <div class="agent-sbar-icon">📤</div>
+      <div>
+        <div class="agent-sbar-title">Pronto para enviar?</div>
+        <div class="agent-sbar-sub">Após enviar, o analista ENBPar irá avaliar o PO. Você não poderá editar durante a análise.</div>
+      </div>
+    </div>
+    <div class="agent-sbar-actions">
+      <span class="agent-sbar-status" id="agentSaveStatus">📝 Em edição</span>
+      <button class="agent-sbar-save" id="agentSaveBtn">💾 Salvar</button>
+      <button id="enviarAnaliseBtn">📤 Enviar para Análise</button>
+    </div>
+  </div>
+</div>
+
+<script>
+
+/* =========================================================
+   SCHEMA — abas técnicas por modelo (mapeado das planilhas)
+   ========================================================= */
+const SCHEMA = {
+  rdr: {
+    codigo: "RDR",
+    nome: "Redes Rurais — LPT-R",
+    tagClass: "tag-rdr",
+    secoes: [
+      { id:"resumo_caracteristicas", ref:"1.1", titulo:"Resumo das Características", abaOrigem:"Resumo Carac.",
+        desc:"Quantitativos gerais de medidores, postes, transformadores, equipamentos de proteção/regulação e condutores do programa.",
+        tipo:"formulario", campos:[
+          {id:"medidor_mono", label:"Medidores Monofásicos (qtd)", tipo:"number"},
+          {id:"medidor_bi", label:"Medidores Bifásicos (qtd)", tipo:"number"},
+          {id:"medidor_tri", label:"Medidores Trifásicos (qtd)", tipo:"number"},
+          {id:"cons_c_poste", label:"Nº Consumidores c/ Poste de Serviço", tipo:"number"},
+          {id:"postes_fibra", label:"Postes — Fibra de Vidro (qtd)", tipo:"number"},
+          {id:"postes_concreto_circ", label:"Postes — Concreto Circular (qtd)", tipo:"number"},
+          {id:"postes_concreto_dt", label:"Postes — Concreto DT (qtd)", tipo:"number"},
+          {id:"kit_instalacao_qtd", label:"Kit de Instalação Interna (qtd)", tipo:"number"},
+          {id:"religador_qtd", label:"Religador (qtd)", tipo:"number"},
+          {id:"regulador_qtd", label:"Regulador Monofásico (qtd)", tipo:"number"},
+          {id:"banco_capac_qtd", label:"Banco Capacitor (qtd)", tipo:"number"},
+          {id:"seccionalizador_qtd", label:"Seccionalizador (qtd)", tipo:"number"},
+          {id:"subestacao_qtd", label:"Subestação (qtd)", tipo:"number"}
+        ]
+      },
+      { id:"resumo_rede", ref:"1.2", titulo:"Resumo da Rede", abaOrigem:"Resumo Rede",
+        desc:"Consolidação de extensões (km), custos e quantidades de rede primária, secundária, adições de fase e reforços.",
+        tipo:"tabela", colunas:["Segmento","Extensão (km)","Custo Total (R$)"],
+        linhasIniciais:[["Rede Primária","",""],["Rede Secundária","",""],["Adição de Fase MT","",""],["Adição de Fase BT","",""],["Reforço MT","",""],["Reforço BT","",""]]
+      },
+      { id:"resumo_financeiro", ref:"1.3", titulo:"Resumo Financeiro", abaOrigem:"Resumo Finan.",
+        desc:"Investimento por categoria, fontes de recursos e índices médios do programa.",
+        tipo:"formulario", campos:[
+          {id:"data_referencia", label:"Data de referência dos custos do PO", tipo:"date"},
+          {id:"inv_material", label:"Material / Equipamento (R$ x1000)", tipo:"number"},
+          {id:"inv_mao_obra", label:"Mão-de-obra de Terceiros (R$ x1000)", tipo:"number"},
+          {id:"inv_transporte", label:"Transporte de Terceiros (R$ x1000)", tipo:"number"},
+          {id:"inv_eng_adm", label:"Eng. e Administração (R$ x1000)", tipo:"number"},
+          {id:"inv_total", label:"Investimento Total (R$ x1000)", tipo:"number", calculado:true},
+          {id:"fonte_agente", label:"Fonte — Agente Executor (R$ x1000)", tipo:"number"},
+          {id:"fonte_cde", label:"Fonte — CDE (R$ x1000)", tipo:"number"},
+          {id:"idx_cons_km", label:"Índice Cons./km", tipo:"number", calculado:true},
+          {id:"idx_kva_cons", label:"Índice kVA/Cons.", tipo:"number", calculado:true},
+          {id:"idx_rs_rede_km", label:"Índice R$ (Rede)/km Total", tipo:"number", calculado:true},
+          {id:"idx_rs_cons", label:"Índice R$/Consumidor", tipo:"number", calculado:true}
+        ]
+      },
+      { id:"cronograma", ref:"1.4", titulo:"Cronograma Físico Financeiro", abaOrigem:"Cronograma Físico Financeiro",
+        desc:"Marcação trimestral das atividades previstas, a partir do prazo total de aplicação dos recursos.",
+        tipo:"cronograma", campos:[{id:"prazo_meses", label:"Prazo total para aplicação dos recursos (meses)", tipo:"number"}],
+        atividades:["Aquisição de Materiais e Contratação de Fornecedores","Execução das Obras","Ligação das UCs"]
+      },
+      { id:"rede_primaria", ref:"2.1", titulo:"Rede Primária (custo unitário / km)", abaOrigem:"Rede Prim.",
+        desc:"Composição de custos unitários para 1 km de rede primária.",
+        tipo:"composicao", camposTopo:[
+          {id:"classe_tensao", label:"Classe de Tensão", tipo:"text"},
+          {id:"sistema", label:"Sistema", tipo:"text"},
+          {id:"condutor_fase", label:"Condutor Fase (tipo / flecha)", tipo:"text"},
+          {id:"condutor_neutro", label:"Condutor Neutro (tipo / flecha)", tipo:"text"}
+        ],
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"],
+        linhasIniciais:[["Poste (Concreto DT 12/600)","","Pç","",""],["Poste (Concreto DT 12/1000)","","Pç","",""],["Poste (Concreto DT 11/300)","","Pç","",""],["Cruzeta","","Pç","",""],["Condutor Fase","","kg","",""],["Condutor Neutro","","kg","",""]]
+      },
+      { id:"adicao_fase_mt", ref:"2.1.1", titulo:"Adição de Fase MT (custo unitário / km)", abaOrigem:"Adição Fase MT",
+        desc:"Composição de custos unitários para adição de fase em rede MT.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Condutor Fase Adicional","","kg","",""]]
+      },
+      { id:"reforco_mt", ref:"2.1.2", titulo:"Reforço MT (custo unitário / km)", abaOrigem:"Reforço MT",
+        desc:"Composição de custos unitários para reforço de rede MT.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Substituição de Condutor","","kg","",""]]
+      },
+      { id:"rede_secundaria", ref:"2.2", titulo:"Rede Secundária (custo unitário / km)", abaOrigem:"Rede Sec.",
+        desc:"Composição de custos unitários para 1 km de rede secundária.", tipo:"composicao",
+        camposTopo:[
+          {id:"classe_tensao", label:"Classe de Tensão", tipo:"text"},
+          {id:"sistema", label:"Sistema", tipo:"text"},
+          {id:"condutor_fase", label:"Condutor Fase (tipo / flecha)", tipo:"text"},
+          {id:"condutor_neutro", label:"Condutor Neutro (tipo / flecha)", tipo:"text"}
+        ],
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"],
+        linhasIniciais:[["Poste (Concreto DT 10/600)","","Pç","",""],["Poste (Fibra de Vidro 11/600)","","Pç","",""],["Condutor Fase","","kg","",""],["Condutor Neutro","","kg","",""]]
+      },
+      { id:"rede_conjugada", ref:"2.3", titulo:"Rede Conjugada (custo unitário / km)", abaOrigem:"Rede Conj.",
+        desc:"Composição de custos unitários para 1 km de rede conjugada (MT + BT).", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Poste","","Pç","",""],["Condutor MT","","kg","",""],["Condutor BT","","kg","",""]]
+      },
+      { id:"adicao_fase_bt", ref:"2.3.1", titulo:"Adição de Fase BT (custo unitário / km)", abaOrigem:"Adição Fase BT",
+        desc:"Composição de custos unitários para adição de fase em rede BT.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Condutor Fase Adicional","","kg","",""]]
+      },
+      { id:"reforco_bt", ref:"2.3.2", titulo:"Reforço BT (custo unitário / km)", abaOrigem:"Reforço BT",
+        desc:"Composição de custos unitários para reforço de rede BT.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Substituição de Condutor","","kg","",""]]
+      },
+      { id:"posto_trafo", ref:"3.1", titulo:"Posto de Transformação", abaOrigem:"Posto Trafo",
+        desc:"Composição de custos unitários do posto de transformação.", tipo:"composicao",
+        camposTopo:[
+          {id:"classe_tensao", label:"Classe de Tensão", tipo:"text"},
+          {id:"transformador", label:"Transformador (especificação)", tipo:"text"},
+          {id:"potencia_kva", label:"Potência (kVA)", tipo:"number"}
+        ],
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"],
+        linhasIniciais:[["Poste (Concreto DT 11/600)","","Pç","",""],["Poste (Concreto DT 11/300)","","Pç","",""],["Cruzeta","","Pç","",""],["Transformador","","Pç","",""],["Chave Fusível","","Pç","",""]]
+      },
+      { id:"reg_tensao", ref:"3.1.1", titulo:"Regulador de Tensão", abaOrigem:"Reg. Tensão",
+        desc:"Composição de custos unitários do regulador de tensão.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Regulador Monofásico","","Pç","",""]]
+      },
+      { id:"religador", ref:"3.1.2", titulo:"Religador", abaOrigem:"Religador",
+        desc:"Composição de custos unitários do religador.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Religador","","Pç","",""]]
+      },
+      { id:"banco_capacitor", ref:"3.1.3", titulo:"Banco Capacitor Fixo", abaOrigem:"Banco Capac.",
+        desc:"Especificações do banco de capacitores fixo.", tipo:"formulario", campos:[
+          {id:"classe_tensao", label:"Classe de Tensão", tipo:"text"},
+          {id:"config_sistema", label:"Configuração do Sistema", tipo:"text"},
+          {id:"potencia_unidade", label:"Potência da Unidade (kVAr)", tipo:"number"},
+          {id:"potencia_banco", label:"Potência do Banco (kVAr)", tipo:"number"},
+          {id:"quantidade_total", label:"Quantidade Total", tipo:"number"}
+        ]
+      },
+      { id:"seccionalizador", ref:"3.1.4", titulo:"Seccionalizador", abaOrigem:"Seccion.",
+        desc:"Composição de custos unitários do seccionalizador.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Seccionalizador","","Pç","",""]]
+      },
+      { id:"padrao_entrada", ref:"4.1", titulo:"Padrão de Entrada — Medidor Eletrônico", abaOrigem:"Padrão Entr. Med. Eletrôn.",
+        desc:"Composição de custos do padrão de entrada (com/sem poste e ramal de ligação).", tipo:"composicao",
+        camposTopo:[
+          {id:"tipo_medidor", label:"Tipo de Medidor", tipo:"select", opcoes:["Monofásico","Bifásico","Trifásico"]},
+          {id:"padrao", label:"Padrão", tipo:"text"}
+        ],
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"],
+        linhasIniciais:[["Poste Auxiliar (Sem Poste)","","Pç","",""],["Poste Auxiliar (Com Poste)","","Pç","",""],["Condutor Fase (Ramal de Ligação)","","kg","",""],["Condutor Neutro (Ramal de Ligação)","","kg","",""]]
+      },
+      { id:"kit_instalacao", ref:"4.2", titulo:"Kit de Instalação Interna", abaOrigem:"Kit Inst.",
+        desc:"Composição de custos do kit de instalação interna.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Kit de Instalação Interna","","Cj","",""]]
+      },
+      { id:"ucs_previstas", ref:"5.1", titulo:"Unidades Consumidoras Previstas", abaOrigem:"Relatório UC's Previstas",
+        desc:"Georreferenciamento e dados das UCs atendidas pelo programa (modelo original com 2.652 linhas).", tipo:"tabela",
+        colunas:["Cód. IBGE","UF","Município","Comunidade","Tipo de Comunidade","Enquadramento (Dec. 11.628)","Tipologia (Dec. 12.964)","Qtd. UCs","Carga Média (kW)","Carga Total (kW)","Latitude","Longitude"],
+        linhasIniciais:[["","","","","","","","","","","",""]]
+      },
+      { id:"ucs_coletivas", ref:"5.2", titulo:"Unidades Consumidoras Coletivas", abaOrigem:"Relatório tipo UC",
+        desc:"Dados de unidades consumidoras coletivas (comunidades indígenas, quilombolas, etc.).", tipo:"tabela",
+        colunas:["Cód. IBGE","UF","Município","Comunidade","Tipo de Comunidade","Nome UC","CPF/CNPJ","Tipologia","Carga Prevista (kW)","Latitude","Longitude"],
+        linhasIniciais:[["","","","","","","","","","",""]]
+      },
+      { id:"mapa_regiao", ref:"5.3", titulo:"Mapa da Região Atendida", abaOrigem:"Mapa Região Atendida",
+        desc:"Upload do mapa com a região atendida pelo programa.", tipo:"mapa" },
+      { id:"se_custos", ref:"6.1", titulo:"Subestação — Composição de Custos", abaOrigem:"SE Composição Custos",
+        desc:"Composição de custos da subestação (quando aplicável ao programa).", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Obras Civis","","Cj","",""]]
+      },
+      { id:"se_equipamentos", ref:"6.2", titulo:"Subestação — Equipamentos", abaOrigem:"SE Equipamentos",
+        desc:"Equipamentos previstos para a subestação.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Transformador de Potência","","Pç","",""]]
+      },
+      { id:"qualificacao_ucs", ref:"0", titulo:"Qualificação das UCs", abaOrigem:"Qualificação UCs",
+        desc:"Tabela de referência com enquadramentos e tipologias de beneficiários utilizados nos relatórios de UC.", tipo:"referencia" }
+    ]
+  },
+
+  rdrx: { herdaDe:"rdr", codigo:"RDR-X", nome:"Redes Rurais — Metas Excepcionais", tagClass:"tag-rdrx",
+    overrides:{
+      ucs_previstas:{ desc:"Georreferenciamento e dados das UCs atendidas (modelo de metas excepcionais, volume reduzido — 58 linhas no template original)." },
+      ucs_coletivas:{ desc:"Dados de unidades consumidoras coletivas (modelo de metas excepcionais, volume reduzido — 45 linhas no template original)." }
+    }
+  },
+
+  sigfi: {
+    codigo:"SIGFI", nome:"Sistemas Isolados — Amazônia Legal (LPT-AL)", tagClass:"tag-sigfi",
+    secoes: [
+      { id:"resumo_financeiro", ref:"1.1", titulo:"Resumo Financeiro", abaOrigem:"Resumo Financeiro",
+        desc:"Investimento por categoria, fontes de recursos e índices médios do programa.", tipo:"formulario", campos:[
+          {id:"data_referencia", label:"Data de referência dos custos do PO", tipo:"date"},
+          {id:"inv_material", label:"Material / Equipamento (R$ x mil)", tipo:"number"},
+          {id:"inv_mao_obra", label:"Mão de Obra de Terceiros (R$ x mil)", tipo:"number"},
+          {id:"inv_transporte", label:"Transporte de Terceiros (R$ x mil)", tipo:"number"},
+          {id:"inv_custos_indiretos", label:"Custos Indiretos (R$ x mil)", tipo:"number"},
+          {id:"inv_total", label:"Investimento Total (R$ x mil)", tipo:"number", calculado:true},
+          {id:"fonte_agente", label:"Fonte — Agente Executor (R$ x mil)", tipo:"number"},
+          {id:"fonte_cde", label:"Fonte — CDE (R$ x mil)", tipo:"number"},
+          {id:"idx_rs_cons", label:"Índice R$/Consumidor", tipo:"number", calculado:true},
+          {id:"idx_rs_wp", label:"Índice R$/Wp", tipo:"number", calculado:true}
+        ]
+      },
+      { id:"resumo_programa", ref:"1.2", titulo:"Resumo do Programa", abaOrigem:"Resumo do Programa",
+        desc:"Consolidação por classe de SIGFI: quantidade de sistemas, UCs, investimento e potência instalada.", tipo:"tabela",
+        colunas:["Classe de SIGFI","Qtd. Sistemas","Nº Total de UCs","R$/Cons","R$/Wp","Investimento Total (R$)","Potência Instalada Total (W)"],
+        linhasIniciais:[["SIGFI 13","","","","","",""],["SIGFI 30","","","","","",""],["SIGFI 45","","","","","",""]]
+      },
+      { id:"totalizacao", ref:"1.3", titulo:"Totalização", abaOrigem:"Totalização",
+        desc:"Totais gerais do programa (sistemas, UCs, investimento e potência).", tipo:"tabela",
+        colunas:["Indicador","Valor"], linhasIniciais:[["Total de Sistemas",""],["Total de UCs",""],["Investimento Total (R$)",""],["Potência Instalada Total (W)",""]]
+      },
+      { id:"cronograma", ref:"1.4", titulo:"Cronograma Físico Financeiro", abaOrigem:"Cronograma Físico Financeiro",
+        desc:"Marcação trimestral das atividades previstas, a partir do prazo total de aplicação dos recursos.", tipo:"cronograma",
+        campos:[{id:"prazo_meses", label:"Prazo total para aplicação dos recursos (meses)", tipo:"number"}],
+        atividades:["Aquisição de Materiais e Contratação de Fornecedores","Marco: Contratação de Fornecedores de Materiais","Instalação dos Sistemas"]
+      },
+      { id:"dados_comunidades", ref:"2.1", titulo:"Dados das Comunidades", abaOrigem:"Dados das Comunidades",
+        desc:"Identificação das comunidades atendidas, UCs e disponibilidade de energia (kWh/mês).", tipo:"tabela",
+        colunas:["Item","Município","Galpão Logístico","Comunidade","Total UCs","Disponib. Total (kWh/mês)","Disponib. Média/UC (kWh/mês)","Latitude","Longitude"],
+        linhasIniciais:[["1","","","","","","","",""],["2","","","","","","","",""]]
+      },
+      { id:"levantamento_consumo", ref:"2.2", titulo:"Levantamento de Consumo", abaOrigem:"Levantamento de Consumo",
+        desc:"Equipamentos e padrão de consumo para definição da disponibilidade da unidade consumidora.", tipo:"composicao",
+        camposTopo:[{id:"disponibilidade_unidade", label:"Disponibilidade da UC (kWh/mês)", tipo:"number"}],
+        colunas:["Equipamento","Qtd. (und.)","Potência (W)","Uso Diário (h)","Fator de Utilização","Consumo Diário (kWh/dia)","Periodicidade (dias)","Consumo Mensal (kWh/mês)"],
+        linhasIniciais:[["Equipamento 1 (lâmpadas, geladeira, ventilador...)","","","","1","","30",""],["Equipamento 2","","","","1","","30",""],["Equipamento 3","","","","1","","30",""]]
+      },
+      { id:"material_geracao", ref:"3.1", titulo:"Material — Geração", abaOrigem:"Material-Geração",
+        desc:"Composição de custos dos equipamentos de geração por classe de SIGFI.", tipo:"composicao",
+        camposTopo:[{id:"classe_sigfi", label:"Classe de SIGFI", tipo:"select", opcoes:["SIGFI 13","SIGFI 30","SIGFI 45"]}],
+        colunas:["Equipamento","Peso (kg)","Qtde","Capacidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"],
+        linhasIniciais:[["Módulo Fotovoltaico","","","","Wp","",""],["Inversor de Tensão","","","","W","",""],["Controlador de Carga","","","","A","",""],["Bateria","","","","Ah@C20","",""]]
+      },
+      { id:"mot_geracao", ref:"3.2", titulo:"Mão de Obra de Terceiros — Geração", abaOrigem:"MOT-Geração",
+        desc:"Referência de custos de mão de obra para instalação dos sistemas de geração.", tipo:"formulario", campos:[
+          {id:"aux_custo_hora", label:"Auxiliar — Custo (R$/h)", tipo:"number"},
+          {id:"aux_diaria", label:"Auxiliar — Diária (R$/dia)", tipo:"number"},
+          {id:"elet_custo_hora", label:"Eletricista — Custo (R$/h)", tipo:"number"},
+          {id:"elet_diaria", label:"Eletricista — Diária (R$/dia)", tipo:"number"},
+          {id:"tec_custo_hora", label:"Técnico — Custo (R$/h)", tipo:"number"},
+          {id:"tec_diaria", label:"Técnico — Diária (R$/dia)", tipo:"number"}
+        ]
+      },
+      { id:"transp_carga", ref:"3.3", titulo:"Transporte de Carga", abaOrigem:"Transp-Carga",
+        desc:"Custo de transporte de carga (almoxarifado até local da obra) por classe de SIGFI.", tipo:"composicao",
+        camposTopo:[{id:"custo_kg", label:"Custo do Transporte (R$/kg)", tipo:"number"}],
+        colunas:["Classe de SIGFI","Qtd. Sistemas","Peso Médio/Sistema (kg)","Custo Médio/Sistema (R$)","Custo Total por Tipo (R$)"],
+        linhasIniciais:[["SIGFI 13","","","",""],["SIGFI 30","","","",""],["SIGFI 45","","","",""]]
+      },
+      { id:"transp_pessoal", ref:"3.4", titulo:"Transporte de Pessoal — Geração", abaOrigem:"Transp-Pessoal-Geração",
+        desc:"Custos de deslocamento de pessoal técnico até as comunidades atendidas.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Deslocamento Fluvial","","Viagem","",""],["Deslocamento Terrestre","","Viagem","",""]]
+      },
+      { id:"padrao_entrada", ref:"3.5", titulo:"Padrão de Entrada", abaOrigem:"Padrão de Entrada",
+        desc:"Composição de custos do padrão de entrada (com/sem poste e ramal de ligação).", tipo:"composicao",
+        camposTopo:[
+          {id:"tipo_medidor", label:"Tipo de Medidor", tipo:"select", opcoes:["Monofásico","Bifásico","Trifásico"]},
+          {id:"padrao", label:"Padrão", tipo:"text"}
+        ],
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"],
+        linhasIniciais:[["Poste Auxiliar (Sem Poste)","","Pç","",""],["Poste Auxiliar (Com Poste)","","Pç","",""],["Condutor Fase (Ramal de Ligação)","","kg","",""],["Condutor Neutro (Ramal de Ligação)","","kg","",""]]
+      },
+      { id:"kit_instalacao", ref:"3.6", titulo:"Kit de Instalação Interna", abaOrigem:"Kit Inst.",
+        desc:"Composição de custos do kit de instalação interna.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Kit de Instalação Interna","","Cj","",""]]
+      },
+      { id:"mot_modulos_adicionais", ref:"3.7", titulo:"MOT — Módulos Adicionais", abaOrigem:"MOT-Módulos Adicionais",
+        desc:"Mão de obra para instalação de módulos fotovoltaicos adicionais.", tipo:"composicao",
+        colunas:["Item","Quantidade","Unidade","Custo Unitário (R$)","Custo Total (R$)"], linhasIniciais:[["Instalação de Módulo Adicional","","Pç","",""]]
+      },
+      { id:"ucs_previstas", ref:"4.1", titulo:"Unidades Consumidoras Previstas", abaOrigem:"Relatório UC's Previstas",
+        desc:"Georreferenciamento e dados das UCs atendidas pelo programa.", tipo:"tabela",
+        colunas:["Cód. IBGE","UF","Município","Comunidade","Tipo de Comunidade","Tipologia do Beneficiário","Qtd. UCs","Carga Média (kW)","Carga Total (kW)","Latitude","Longitude"],
+        linhasIniciais:[["","","","","","","","","","",""]]
+      },
+      { id:"ucs_coletivas", ref:"4.2", titulo:"Unidades Consumidoras Coletivas", abaOrigem:"Relatório tipo UC",
+        desc:"Dados de unidades consumidoras coletivas.", tipo:"tabela",
+        colunas:["Cód. IBGE","UF","Município","Comunidade","Nome UC","CPF/CNPJ","Tipologia","Carga Prevista (kW)","Latitude","Longitude"],
+        linhasIniciais:[["","","","","","","","",""]]
+      },
+      { id:"mapa_regiao", ref:"4.3", titulo:"Mapa da Região Atendida", abaOrigem:"Mapa Região Atendida",
+        desc:"Upload do mapa com a região atendida pelo programa.", tipo:"mapa" },
+      { id:"qualificacao_ucs", ref:"0", titulo:"Qualificação das UCs", abaOrigem:"Qualificação UCs",
+        desc:"Tabela de referência com enquadramentos e tipologias de beneficiários.", tipo:"referencia" }
+    ]
+  }
+};
+
+/* =========================================================
+   SESSÃO
+   ========================================================= */
+const STORAGE_SESSION_KEY = 'plataforma_po_sessao';
+function getSessao(){
+  try {
+    const raw = localStorage.getItem(STORAGE_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e){ return null; }
+}
+const sessao = getSessao();
+if(!sessao){
+  window.location.href = './login.html';
+}
+
+/* =========================================================
+   ESTADO — PO selecionado (id) e modelo
+   ========================================================= */
+const params = new URLSearchParams(window.location.search);
+const poId = params.get('id');
+
+/* ── FIRESTORE: programas ── */
+async function getPrograma(){
+  if(!poId) return null;
+  const lista = await loadProgramas();
+  return lista.find(p => p.id === poId) || null;
+}
+async function updatePrograma(changes){
+  if(!poId) return;
+  await updateProgramaFS(poId, changes);
+}
+
+/* loadDadosFS / saveDadosFS definidos no bloco JSONBin acima */
+
+// programa e modeloId inicializados em initPage() abaixo
+
+function getSecoes(modeloId){
+  const modelo = SCHEMA[modeloId];
+  if(modelo.herdaDe){
+    const base = SCHEMA[modelo.herdaDe];
+    const overrides = modelo.overrides || {};
+    return base.secoes.map(s => overrides[s.id] ? {...s, ...overrides[s.id]} : s);
+  }
+  return modelo.secoes;
+}
+
+const modeloAtual = SCHEMA[modeloId];
+const secoes = getSecoes(modeloId);
+const nomeModelo = (modeloAtual.herdaDe ? SCHEMA[modeloAtual.herdaDe] : modeloAtual);
+
+document.getElementById('poModelTag').textContent = modeloAtual.codigo + (modeloAtual.herdaDe ? ' — Metas Excepcionais' : (modeloAtual.codigo === 'RDR' ? ' — Redes Rurais' : ' — Sistemas Isolados'));
+document.getElementById('poModelTag').className = 'tag ' + modeloAtual.tagClass;
+
+if(programa){
+  document.getElementById('poName').textContent = `${programa.codigo} · ${programa.nome}`;
+  document.getElementById('poAgente').textContent = programa.agente || '—';
+  document.getElementById('poData').textContent = programa.dataReferencia
+    ? programa.dataReferencia.split('-').reverse().join('/')
+    : '—';
+  // Analista AP designado
+  const analistaInfo = document.getElementById('analistaApInfo');
+  const analistaSep  = document.getElementById('analistaApSep');
+  if(programa.analistaAp){
+    const nomeEl = document.getElementById('analistaApNome');
+    if(nomeEl) nomeEl.textContent = programa.analistaAp;
+    if(analistaInfo) analistaInfo.style.display = 'inline';
+    if(analistaSep)  analistaSep.style.display  = 'inline';
+  } else {
+    if(analistaInfo) analistaInfo.style.display = 'none';
+    if(analistaSep)  analistaSep.style.display  = 'none';
+  }
+  document.getElementById('overallPct').textContent = (programa.progresso || 0) + '%';
+  document.getElementById('overallBar').style.width = (programa.progresso || 0) + '%';
+} else {
+  document.getElementById('poName').textContent = 'Programa de Obras não encontrado';
+  const warning = document.createElement('div');
+  warning.style.cssText = 'background:rgba(230,168,23,0.08); border:1px solid rgba(230,168,23,0.35); color:#A6790F; padding:12px 32px; font-size:13px;';
+  warning.textContent = 'Este PO não foi encontrado no armazenamento local. As alterações feitas aqui não serão salvas. Volte ao Dashboard e crie um novo Programa de Obras.';
+  document.querySelector('.hdr-info').after(warning);
+}
+
+const STATUS_LABELS_PO = {
+  draft:       'Rascunho',
+  ap_enviado:  'Análise Preliminar: Aguardando',
+  ap_revisao:  'Análise Preliminar: Em Revisão',
+  ap_aprovado: 'Análise Preliminar: Aprovada',
+  at_enviado:  'Análise Técnica: Aguardando',
+  at_revisao:  'Análise Técnica: Em Revisão',
+  aprovado:    'Aprovado'
+};
+async function atualizarStatusLabel(){
+  const p = await getPrograma();
+  document.getElementById('poStatus').textContent = STATUS_LABELS_PO[p ? p.status : 'draft'] || 'Rascunho';
+}
+
+/* Exibir botão de parecer na po-strip (se houver pareceres) */
+async function exibirBannerParecer() {
+  const p = await getPrograma();
+  const wrap = document.getElementById('parecerNotifWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  if (!p || !p.pareceres || p.pareceres.length === 0) return;
+
+  const ultimo = p.pareceres[p.pareceres.length - 1];
+  const isRevisao = ultimo.tipo === 'revisao';
+  const qtd = p.pareceres.length;
+  const tipo = ultimo.tipo;
+
+  const btn = document.createElement('button');
+  btn.className = `parecer-notif tipo-${tipo}`;
+  btn.innerHTML = `
+    <span class="parecer-notif-dot"></span>
+    ${isRevisao ? '📋 Ver Parecer Técnico' : '✅ Ver Aprovação'}
+    <span style="font-size:11px;opacity:.7;font-weight:500;margin-left:2px">${qtd > 1 ? '(' + qtd + ')' : ''}</span>`;
+  btn.onclick = () => abrirDocParecer(p);
+  wrap.appendChild(btn);
+}
+exibirBannerParecer();
+
+/* Abrir modal de documento de parecer */
+function abrirDocParecer(p) {
+  if (!p || !p.pareceres || p.pareceres.length === 0) return;
+
+  const ultimo = p.pareceres[p.pareceres.length - 1];
+  const isRevisao = ultimo.tipo === 'revisao';
+  const etapaLabel = ultimo.etapa === 'ap' ? 'Análise Preliminar' : 'Análise Técnica e Orçamentária';
+
+  // Cabeçalho
+  document.getElementById('pdTitulo').textContent = isRevisao
+    ? `Parecer — ${etapaLabel} · Ajustes Solicitados`
+    : `Parecer — ${etapaLabel} · Aprovado`;
+  document.getElementById('pdSubtitulo').textContent = isRevisao
+    ? 'A equipe técnica ENBPar solicitou ajustes neste Programa de Obras.'
+    : 'Este Programa de Obras foi aprovado pela equipe técnica ENBPar.';
+
+  // Ficha
+  document.getElementById('pdNome').textContent = p.nome || '—';
+  document.getElementById('pdCodigo').textContent = p.codigo || '—';
+  document.getElementById('pdAgente').textContent = p.agente || '—';
+  const modelNames = { rdr:'RDR — Redes Rurais', rdrx:'RDR-X — Metas Excepcionais', sigfi:'SIGFI — Sistemas Isolados' };
+  document.getElementById('pdModelo').textContent = modelNames[p.modelo] || p.modelo || '—';
+  document.getElementById('pdProgresso').textContent = (p.progresso || 0) + '% preenchido';
+
+  // Corpo — todos os pareceres, mais recente primeiro
+  const body = document.getElementById('pdBody');
+  body.innerHTML = '';
+  const total = p.pareceres.length;
+
+  [...p.pareceres].reverse().forEach((par, i) => {
+    const isAprov = par.tipo === 'aprovado';
+    const num = total - i;
+    const etLbl = par.etapa === 'ap' ? 'An. Preliminar' : 'An. Técnica';
+    const entry = document.createElement('div');
+    entry.className = 'parecer-entry';
+
+    // Montar apontamentos por aba
+    let apontHtml = '';
+    if (par.apontamentos && par.apontamentos.length > 0) {
+      apontHtml = par.apontamentos.map(a => `
+        <div style="margin-bottom:12px;border-left:3px solid #0B82C6;padding-left:10px">
+          <div style="font-size:10.5px;font-weight:700;color:#0B82C6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">
+            Aba ${a.ref} — ${a.titulo}
+          </div>
+          ${a.textos.map((t,j) => `<div style="font-size:13px;color:#2c2c2c;padding:6px 9px;background:#fafafa;border-radius:6px;margin-bottom:4px"><span style="font-weight:700;color:#9CA3AF">${j+1}.</span> ${t}</div>`).join('')}
+        </div>`).join('');
+    } else if (par.texto) {
+      apontHtml = `<div class="parecer-entry-text ${par.tipo}">${par.texto.replace(/\n/g,'<br>')}</div>`;
+    }
+
+    // Botão de download para este parecer
+    const btnId = `btn-dl-${i}`;
+    entry.innerHTML = `
+      <div class="parecer-entry-header">
+        <span class="parecer-entry-badge ${par.tipo}">
+          ${isAprov ? '✅' : '🔁'} ${isAprov ? 'Aprovado' : 'Ajustes Solicitados'} · ${etLbl}
+          ${total > 1 ? ' · ' + num + '/' + total : ''}
+        </span>
+        <div class="parecer-entry-date">
+          ${par.data ? par.data.split('-').reverse().join('/') : '—'}<br>
+          <span style="font-size:10.5px">às ${par.hora || '—'}</span>
+        </div>
+      </div>
+      <div class="parecer-entry-autor">ENBPar — ${par.autor}</div>
+      ${apontHtml}
+      <div style="margin-top:10px">
+        <button id="${btnId}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:7px;border:1.5px solid #0B2545;background:#fff;color:#0B2545;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s"
+          onmouseover="this.style.background='#0B2545';this.style.color='#fff'"
+          onmouseout="this.style.background='#fff';this.style.color='#0B2545'">
+          📄 Baixar Parecer em PDF
+        </button>
+      </div>`;
+
+    // Bind download após inserir no DOM
+    body.appendChild(entry);
+    document.getElementById(btnId).onclick = () => {
+      if (typeof gerarPDFParecer === 'function') gerarPDFParecer(par, p);
+    };
+  });
+
+  // Rodapé
+  const dataUlt = ultimo.data ? ultimo.data.split('-').reverse().join('/') : '—';
+  document.getElementById('pdFooterInfo').textContent =
+    `Último parecer: ${dataUlt} às ${ultimo.hora || '—'} · ${total} parecer${total > 1 ? 'es' : ''}`;
+
+  document.getElementById('parecerOverlay').classList.add('open');
+}
+
+function fecharDocParecer() {
+  document.getElementById('parecerOverlay').classList.remove('open');
+}
+
+/* =========================================================
+   DADOS DAS SEÇÕES — persistidos por PO
+   ========================================================= */
+/* dadosSalvos será carregado de forma assíncrona via initPage() */
+let dadosSalvos = {};
+
+/* =========================================================
+   RENDER — Tabs (estilo abas de planilha) + Seções
+   ========================================================= */
+const sheetTabs = document.getElementById('sheetTabs');
+const mainContent = document.getElementById('mainContent');
+const footerNav = document.querySelector('.footer-nav');
+
+const GROUP_LABELS = {
+  '1': 'Programa',
+  '2': 'Redes',
+  '3': 'Equipamentos / UCs',
+  '4': 'UCs e Anexos',
+  '5': 'UCs e Anexos',
+  '6': 'Subestação',
+  '0': 'Referência'
+};
+
+let currentGroupKey = null;
+let currentGroupEl = null;
+
+secoes.forEach((sec, idx) => {
+  const refNum = sec.ref.split('.')[0];
+  const groupKey = GROUP_LABELS[refNum] || 'Geral';
+
+  if(groupKey !== currentGroupKey){
+    currentGroupEl = document.createElement('div');
+    currentGroupEl.className = 'tab-group';
+    const label = document.createElement('div');
+    label.className = 'tab-group-label';
+    label.textContent = groupKey;
+    currentGroupEl.appendChild(label);
+    sheetTabs.appendChild(currentGroupEl);
+    currentGroupKey = groupKey;
+  }
+
+  const tab = document.createElement('button');
+  tab.className = 'sheet-tab';
+  tab.dataset.section = sec.id;
+  tab.innerHTML = `<span class="check"></span>${sec.titulo}<span class="ref">${sec.ref}</span>`;
+  if(idx === 0) tab.classList.add('active');
+  tab.addEventListener('click', () => showSection(sec.id));
+  currentGroupEl.appendChild(tab);
+
+  // Section card
+  const card = document.createElement('section');
+  card.className = 'section-card';
+  card.id = sec.id;
+  if(idx === 0) card.classList.add('active');
+  card.innerHTML = renderSection(sec);
+  mainContent.insertBefore(card, footerNav);
+});
+
+function showSection(id){
+  document.querySelectorAll('.section-card').forEach(c => c.classList.toggle('active', c.id === id));
+  document.querySelectorAll('.sheet-tab').forEach(t => t.classList.toggle('active', t.dataset.section === id));
+  const tabEl = document.querySelector(`.sheet-tab[data-section="${id}"]`);
+  if(tabEl) tabEl.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
+  updateFooterNav(id);
+  window.scrollTo({ top: 0, behavior:'smooth' });
+}
+
+function updateFooterNav(id){
+  const idx = secoes.findIndex(s => s.id === id);
+  document.getElementById('navInfo').textContent = `Aba ${idx+1} de ${secoes.length} — ${secoes[idx].titulo}`;
+  const prevBtn = document.getElementById('prevTabBtn');
+  const nextBtn = document.getElementById('nextTabBtn');
+  prevBtn.disabled = idx === 0;
+  nextBtn.disabled = idx === secoes.length - 1;
+  prevBtn.style.opacity = prevBtn.disabled ? '0.4' : '1';
+  nextBtn.style.opacity = nextBtn.disabled ? '0.4' : '1';
+  prevBtn.style.cursor = prevBtn.disabled ? 'default' : 'pointer';
+  nextBtn.style.cursor = nextBtn.disabled ? 'default' : 'pointer';
+}
+
+document.getElementById('prevTabBtn').addEventListener('click', () => {
+  const idx = secoes.findIndex(s => s.id === document.querySelector('.section-card.active').id);
+  if(idx > 0) showSection(secoes[idx-1].id);
+});
+document.getElementById('nextTabBtn').addEventListener('click', () => {
+  const idx = secoes.findIndex(s => s.id === document.querySelector('.section-card.active').id);
+  if(idx < secoes.length - 1) showSection(secoes[idx+1].id);
+});
+
+updateFooterNav(secoes[0].id);
+
+/* =========================================================
+   RENDER FUNCTIONS
+   ========================================================= */
+function renderSection(sec){
+  let html = `<span class="ref-tag">${sec.ref} · Aba origem: ${sec.abaOrigem || sec.abasOrigem || '—'}</span>`;
+  html += `<h3>${sec.titulo}</h3>`;
+  if(sec.desc) html += `<p class="desc">${sec.desc}</p>`;
+
+  switch(sec.tipo){
+    case 'formulario':
+      html += renderFormulario(sec.campos, sec.id);
+      break;
+    case 'tabela':
+      html += renderTabela(sec);
+      break;
+    case 'composicao':
+      if(sec.camposTopo) html += renderFormulario(sec.camposTopo, sec.id);
+      html += renderTabela(sec);
+      break;
+    case 'cronograma':
+      html += renderFormulario(sec.campos, sec.id);
+      html += renderCronograma(sec);
+      break;
+    case 'mapa':
+      html += renderMapa();
+      break;
+    case 'referencia':
+      html += `<div class="ref-note">Esta aba contém tabelas de referência (enquadramentos legais e tipologias de beneficiários conforme Decreto nº 11.628 e Decreto nº 12.964) usadas para preencher os campos de "Enquadramento" e "Tipologia" nas seções de UCs Previstas e UCs Coletivas. Conteúdo fixo do modelo — não requer preenchimento.</div>`;
+      break;
+  }
+  return html;
+}
+
+function renderFormulario(campos, secId){
+  if(!campos) return '';
+  let html = '<div class="form-grid">';
+  campos.forEach(c => {
+    html += '<div class="field">';
+    html += `<label>${c.label}${c.calculado ? '<span class="calc-badge">calculado</span>' : ''}</label>`;
+    const fieldKey = `${secId}.${c.id}`;
+    if(c.tipo === 'select'){
+      html += `<select data-field="${fieldKey}" ${c.calculado ? 'disabled' : ''}>`;
+      html += `<option value="">Selecione...</option>`;
+      (c.opcoes || []).forEach(o => html += `<option>${o}</option>`);
+      html += `</select>`;
+    } else if(c.tipo === 'date'){
+      html += `<input type="date" data-field="${fieldKey}" ${c.calculado ? 'disabled' : ''}>`;
+    } else {
+      html += `<input type="${c.tipo === 'number' ? 'number' : 'text'}" data-field="${fieldKey}" placeholder="${c.calculado ? 'Calculado automaticamente' : '—'}" ${c.calculado ? 'disabled' : ''}>`;
+    }
+    if(c.calculado) html += `<p class="hint">Calculado a partir dos demais campos desta seção.</p>`;
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderTabela(sec){
+  let html = `<div class="table-editor-wrap"><table class="editor" data-table="${sec.id}"><thead><tr>`;
+  sec.colunas.forEach(col => html += `<th>${col}</th>`);
+  html += '<th style="width:36px;"></th></tr></thead><tbody>';
+  const salvas = dadosSalvos[sec.id] && dadosSalvos[sec.id].linhas;
+  const linhas = (salvas && salvas.length) ? salvas
+    : (sec.linhasIniciais && sec.linhasIniciais.length ? sec.linhasIniciais : [sec.colunas.map(()=>"")]);
+  linhas.forEach(linha => {
+    html += '<tr>';
+    linha.forEach(val => html += `<td><input type="text" value="${(val ?? '').toString().replace(/"/g,'&quot;')}"></td>`);
+    html += `<td><button class="btn btn-ghost" style="padding:6px 9px;" onclick="this.closest('tr').remove(); salvarTudo();">✕</button></td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  html += `<div class="table-actions">
+    <span class="small-note">${linhas.length} linha(s) — adicione conforme necessário</span>
+    <button class="btn btn-ghost" onclick="addRow(this, ${sec.colunas.length})">＋ Adicionar linha</button>
+  </div>`;
+  return html;
+}
+
+function addRow(btn, numCols){
+  const table = btn.closest('.section-card').querySelector('table.editor tbody');
+  const tr = document.createElement('tr');
+  let html = '';
+  for(let i=0;i<numCols;i++) html += `<td><input type="text" value=""></td>`;
+  html += `<td><button class="btn btn-ghost" style="padding:6px 9px;" onclick="this.closest('tr').remove(); salvarTudo();">✕</button></td>`;
+  tr.innerHTML = html;
+  table.appendChild(tr);
+  salvarTudo();
+}
+
+function renderCronograma(sec){
+  const trimestres = ['1ºT Ano 1','2ºT Ano 1','3ºT Ano 1','4ºT Ano 1','1ºT Ano 2','2ºT Ano 2','3ºT Ano 2','4ºT Ano 2','1ºT Ano 3'];
+  const salvas = (dadosSalvos[sec.id] && dadosSalvos[sec.id].cronograma) || {};
+  let html = `<div class="cron-wrap"><table class="cron" data-cron="${sec.id}"><thead><tr><th class="activity">Atividade</th>`;
+  trimestres.forEach(t => html += `<th>${t}</th>`);
+  html += '</tr></thead><tbody>';
+  sec.atividades.forEach((at, ai) => {
+    html += `<tr><td class="activity">${at}</td>`;
+    trimestres.forEach((t, ti) => {
+      const checked = salvas[`${ai}_${ti}`] ? 'checked' : '';
+      html += `<td><input type="checkbox" data-cron-cell="${ai}_${ti}" ${checked}></td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  html += '<p class="hint" style="margin-top:8px;">Marque os trimestres em que cada atividade está prevista, conforme o prazo total informado acima.</p>';
+  return html;
+}
+
+function renderMapa(){
+  return `<div class="map-placeholder">
+    <div>📍 Nenhum arquivo enviado</div>
+    <button class="btn btn-ghost">Anexar mapa (KML, imagem ou PDF)</button>
+  </div>`;
+}
+
+/* =========================================================
+   PROGRESS TRACKING + PERSISTÊNCIA
+   ========================================================= */
+function updateProgress(){
+  const total = secoes.length;
+  let done = 0;
+  secoes.forEach(sec => {
+    const card = document.getElementById(sec.id);
+    const inputs = card.querySelectorAll('input, select, textarea');
+    let filled = false;
+    inputs.forEach(i => {
+      if(i.type === 'checkbox'){ if(i.checked) filled = true; }
+      else if(i.value && i.value.trim() !== '') filled = true;
+    });
+    const tab = document.querySelector(`.sheet-tab[data-section="${sec.id}"]`);
+    if(filled){ tab.classList.add('done'); done++; }
+    else tab.classList.remove('done');
+  });
+  const pct = Math.round((done/total)*100);
+  document.getElementById('overallPct').textContent = pct + '%';
+  document.getElementById('overallBar').style.width = pct + '%';
+  return pct;
+}
+
+function coletarDados(){
+  const dados = {};
+  secoes.forEach(sec => {
+    const card = document.getElementById(sec.id);
+    const entry = {};
+
+    // Campos de formulário (data-field)
+    const campos = card.querySelectorAll('[data-field]');
+    if(campos.length){
+      entry.campos = {};
+      campos.forEach(el => { entry.campos[el.dataset.field] = el.value; });
+    }
+
+    // Tabela editável
+    const table = card.querySelector('table.editor[data-table]');
+    if(table){
+      const linhas = [];
+      table.querySelectorAll('tbody tr').forEach(tr => {
+        const valores = [];
+        tr.querySelectorAll('input[type="text"]').forEach(inp => valores.push(inp.value));
+        linhas.push(valores);
+      });
+      entry.linhas = linhas;
+    }
+
+    // Cronograma
+    const cron = card.querySelector('table.cron[data-cron]');
+    if(cron){
+      const cronograma = {};
+      cron.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        if(cb.checked) cronograma[cb.dataset.cronCell] = true;
+      });
+      entry.cronograma = cronograma;
+    }
+
+    if(Object.keys(entry).length) dados[sec.id] = entry;
+  });
+  return dados;
+}
+
+function restaurarCampos(){
+  secoes.forEach(sec => {
+    const entry = dadosSalvos[sec.id];
+    if(!entry || !entry.campos) return;
+    Object.entries(entry.campos).forEach(([fieldKey, value]) => {
+      const el = document.querySelector(`[data-field="${fieldKey}"]`);
+      if(el) el.value = value;
+    });
+  });
+}
+
+let saveTimeout = null;
+async function salvarTudo(silencioso){
+  const dados = coletarDados();
+  saveDadosFS(poId, dados); // async — fire and forget
+  const pct = updateProgress();
+
+  if(programa){
+    await updatePrograma({ progresso: pct });
+    atualizarStatusLabel();
+  }
+
+  if(!silencioso) showSaveFeedback();
+}
+
+function showSaveFeedback(){
+  // Admin save bar
+  const statusEl = document.getElementById('saveStatus');
+  if(statusEl){ statusEl.textContent = '✅ Salvo às ' + new Date().toLocaleTimeString('pt-BR'); statusEl.classList.add('ok'); }
+  // Agent save bar
+  const agentStatus = document.getElementById('agentSaveStatus');
+  if(agentStatus){ agentStatus.textContent = '✅ Salvo às ' + new Date().toLocaleTimeString('pt-BR'); agentStatus.style.color = '#86EFAC'; }
+  // Save button feedback
+  const btn = document.getElementById('saveBtn');
+  if(btn){ const orig = btn.textContent; btn.textContent = 'Salvo ✓'; btn.disabled = true; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500); }
+  setTimeout(() => {
+    if(statusEl){ statusEl.textContent = '📝 Formulário em edição'; statusEl.classList.remove('ok'); }
+    if(agentStatus){ agentStatus.textContent = '📝 Em edição'; agentStatus.style.color = 'rgba(255,255,255,.5)'; }
+  }, 2000);
+}
+
+/* ── Inicialização assíncrona da página ── */
+async function initPage(){
+  // 1. Carregar programa do Firestore
+  programa = await getPrograma();
+
+  // Segurança: agente só acessa PO designado a ele
+  if(sessao && sessao.perfil === 'agente' && programa && programa.responsavelId !== sessao.id){
+    window.location.href = './meus_pos.html'; return;
+  }
+
+  // 2. Carregar dados salvos do PO
+  dadosSalvos = await loadDadosFS(poId);
+
+  // 3. Renderizar
+  restaurarCampos();
+  updateProgress();
+  await atualizarStatusLabel();
+  await exibirBannerParecer();
+}
+initPage();
+
+mainContent.addEventListener('input', () => {
+  updateProgress();
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => salvarTudo(true), 600);
+});
+mainContent.addEventListener('change', () => salvarTudo(true));
+
+/* =========================================================
+   SAVE (botão)
+   ========================================================= */
+document.getElementById('saveBtn').addEventListener('click', () => salvarTudo(false));
+
+/* =========================================================
+   WORKFLOW — Enviar para Análise
+   ========================================================= */
+const enviarBtn = document.getElementById('enviarAnaliseBtn');
+
+async function atualizarBotaoEnviar(){
+  if(!programa){ enviarBtn.style.display = 'none'; return; }
+
+  // Apenas o Agente Executor responsável envia para análise
+  if(!sessao || sessao.perfil !== 'agente'){
+    enviarBtn.style.display = 'none';
+    return;
+  }
+
+  const s = programa.status || 'draft';
+  if(s === 'draft'){
+    enviarBtn.style.display = 'inline-flex';
+    enviarBtn.textContent = '📤 Enviar para Análise Preliminar';
+    enviarBtn.disabled = false;
+  } else if(s === 'ap_revisao'){
+    enviarBtn.style.display = 'inline-flex';
+    enviarBtn.textContent = '📤 Reenviar para Análise Preliminar';
+    enviarBtn.disabled = false;
+  } else if(s === 'at_revisao'){
+    enviarBtn.style.display = 'inline-flex';
+    enviarBtn.textContent = '📤 Reenviar para Análise Técnica';
+    enviarBtn.disabled = false;
+  } else if(s === 'ap_enviado'){
+    enviarBtn.style.display = 'inline-flex';
+    enviarBtn.textContent = '⏳ Aguardando Análise Preliminar';
+    enviarBtn.disabled = true;
+  } else if(s === 'ap_aprovado'){
+    enviarBtn.style.display = 'inline-flex';
+    enviarBtn.textContent = '✔ Análise Preliminar Aprovada';
+    enviarBtn.disabled = true;
+  } else if(s === 'at_enviado'){
+    enviarBtn.style.display = 'inline-flex';
+    enviarBtn.textContent = '⏳ Aguardando Análise Técnica';
+    enviarBtn.disabled = true;
+  } else if(s === 'aprovado'){
+    enviarBtn.style.display = 'inline-flex';
+    enviarBtn.textContent = '✅ PO Aprovado';
+    enviarBtn.disabled = true;
+  }
+}
+atualizarBotaoEnviar();
+
+enviarBtn.addEventListener('click', () => {
+  if(!programa) return;
+  salvarTudo(true);
+  const s = programa.status || 'draft';
+  let novoStatus = 'ap_enviado';
+  if(s === 'at_revisao') novoStatus = 'at_enviado';
+  await updatePrograma({ status: novoStatus });
+  atualizarStatusLabel();
+  atualizarBotaoEnviar();
+  if(typeof atualizarWfBarEBotaoParecer === 'function') atualizarWfBarEBotaoParecer();
+  enviarBtn.textContent = '✓ Enviado!';
+  setTimeout(() => atualizarBotaoEnviar(), 1200);
+});
+
+
+</script>
+
+<!-- MODAL: DOCUMENTO DE PARECER -->
+<div class="parecer-overlay" id="parecerOverlay" onclick="if(event.target===this)fecharDocParecer()">
+  <div class="parecer-doc" id="parecerDoc">
+    <div class="parecer-doc-header">
+      <div class="parecer-doc-header-top">
+        <div>
+          <div class="parecer-doc-marca">ENBPar · Programa Luz para Todos</div>
+          <div class="parecer-doc-titulo" id="pdTitulo">Parecer Técnico</div>
+          <div class="parecer-doc-subtitulo" id="pdSubtitulo"></div>
+        </div>
+        <button class="parecer-doc-close" onclick="fecharDocParecer()">×</button>
+      </div>
+    </div>
+
+    <div style="padding:0 32px">
+      <div class="parecer-doc-ficha">
+        <table>
+          <tr><td>Programa de Obras</td><td id="pdNome">—</td></tr>
+          <tr><td>Código</td><td id="pdCodigo" style="font-family:'Roboto Mono',monospace;font-size:12.5px">—</td></tr>
+          <tr><td>Agente Executor</td><td id="pdAgente">—</td></tr>
+          <tr><td>Modelo</td><td id="pdModelo">—</td></tr>
+          <tr><td>Preenchimento</td><td id="pdProgresso">—</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="parecer-doc-body" id="pdBody">
+      <!-- pareceres injetados via JS -->
+    </div>
+
+    <div class="parecer-doc-footer">
+      <span id="pdFooterInfo"></span>
+      <div class="parecer-doc-footer-actions">
+        <button class="btn-parecer-fechar" onclick="fecharDocParecer()">Fechar documento</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── INIT EXTRA: wf-bar steps, admin bar, save bar routing ── */
+(function(){
+  const sessao = getSessao();
+  const isAgente = sessao && sessao.perfil === 'agente';
+
+  // Admin bar user
+  if(sessao){
+    document.getElementById('adminBarUser').textContent =
+      (sessao.perfil === 'admin' ? 'Admin: ' : 'Agente: ') + sessao.nome;
+  }
+  document.getElementById('adminBarLogout').addEventListener('click', (e) => {
+    e.preventDefault();
+    localStorage.removeItem('plataforma_po_sessao');
+    window.location.href = './login.html';
+  });
+
+  // Back button: admin → dashboard, agente → meus_pos
+  const backBtn = document.querySelector('.admin-bar-back');
+  if(backBtn){
+    const perfilBack = sessao ? sessao.perfil : 'admin';
+  if(backBtn){
+    backBtn.href = perfilBack === 'agente' ? 'meus_pos.html'
+      : perfilBack === 'analista_ap' ? 'analise_preliminar.html'
+      : 'dashboard_programas_obras.html';
+  }
+  }
+
+  // Show correct save bar
+  if(isAgente){
+    document.getElementById('sbar').style.display = 'none';
+    document.getElementById('agentSbar').style.display = 'block';
+    // Agent save button
+    document.getElementById('agentSaveBtn').addEventListener('click', () => salvarTudo(false));
+  } else {
+    document.getElementById('agentSbar').style.display = 'none';
+    document.getElementById('sbar').style.display = 'flex';
+    // saveBtn listener already bound in main script
+  }
+
+  // Populate PO code in top bar
+  const prog = programa;
+  if(prog){
+    document.getElementById('poCode').textContent = prog.codigo || 'PO';
+  }
+
+  // WF Steps
+  const WF_STEPS = [
+    {id:'draft',       label:'Preenchimento',     icon:'✏',  group: null},
+    {id:'ap_enviado',  label:'An. Preliminar',    icon:'🔎', group:'ap'},
+    {id:'ap_aprovado', label:'AP Aprovada',       icon:'✔',  group:'ap'},
+    {id:'at_enviado',  label:'An. Técnica',       icon:'🔍', group:'at'},
+    {id:'aprovado',    label:'Aprovado',          icon:'✅', group:'at'},
+  ];
+  // Mapeamento: status real → step visual ativo
+  const STATUS_TO_STEP = {
+    draft:       'draft',
+    ap_enviado:  'ap_enviado',
+    ap_revisao:  'ap_enviado',
+    ap_aprovado: 'ap_aprovado',
+    at_enviado:  'at_enviado',
+    at_revisao:  'at_enviado',
+    aprovado:    'aprovado',
+  };  const WF_BADGE = {
+    draft:       {cls:'wsb-draft',       txt:'✏ Rascunho'},
+    ap_enviado:  {cls:'wsb-review',      txt:'🔍 Análise Preliminar: Aguardando'},
+    ap_revisao:  {cls:'wsb-returned',    txt:'↩ An. Preliminar: Em Revisão'},
+    ap_aprovado: {cls:'wsb-ap-approved', txt:'✔ Análise Preliminar: Aprovada'},
+    at_enviado:  {cls:'wsb-review',      txt:'🔍 Análise Técnica: Aguardando'},
+    at_revisao:  {cls:'wsb-returned',    txt:'↩ An. Técnica: Em Revisão'},
+    aprovado:    {cls:'wsb-approved',    txt:'✅ Aprovado pela ENBPar'},
+  };
+  const STATUS_ORDER = ['draft','ap_enviado','ap_revisao','ap_aprovado','at_enviado','at_revisao','aprovado'];
+  const status = prog ? (prog.status || 'draft') : 'draft';
+  const curIdx = STATUS_ORDER.indexOf(status);
+
+  const stepsEl = document.getElementById('wfSteps');
+  const activeStepId = STATUS_TO_STEP[status] || 'draft';
+  const activeStepIdx = WF_STEPS.findIndex(s => s.id === activeStepId);
+
+  WF_STEPS.forEach((step, i) => {
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'wf-step';
+    let stateClass = '';
+    if(i < activeStepIdx) stateClass = 'done';
+    else if(i === activeStepIdx){
+      if(status === 'aprovado') stateClass = 'st-approved';
+      else if(status === 'ap_revisao' || status === 'at_revisao') stateClass = 'st-returned';
+      else stateClass = 'active';
+    }
+    if(stateClass) stepDiv.classList.add(stateClass);
+
+    // Badge de etapa
+    const grupoBadge = step.group === 'ap' ? '<span class="wf-step-badge wf-badge-ap">AP</span>' :
+                       step.group === 'at' ? '<span class="wf-step-badge wf-badge-at">AT</span>' : '';
+    stepDiv.innerHTML = `
+      <div class="wf-step-inner">
+        <div class="wf-step-icon">${step.icon}${grupoBadge}</div>
+        <div class="wf-step-label">${step.label}</div>
+      </div>`;
+    stepsEl.appendChild(stepDiv);
+
+    if(i < WF_STEPS.length - 1){
+      const conn = document.createElement('div');
+      conn.className = 'wf-connector' + (i < activeStepIdx ? ' done' : '');
+      stepsEl.appendChild(conn);
+    }
+  });
+
+  const badgeEl = document.getElementById('wfBadge');
+  const bInfo = WF_BADGE[status] || WF_BADGE.draft;
+  badgeEl.className = 'wf-status-badge ' + bInfo.cls;
+  badgeEl.textContent = bInfo.txt;
+
+  // Botão de Registrar Parecer — visível só ao Admin nos status "aguardando análise"
+  function atualizarWfBarEBotaoParecer() {
+    const btnParecer = document.getElementById('btnRegistrarParecer');
+    const btnEncaminhar = document.getElementById('btnEncaminharAT');
+    const progAtual = programa;
+    const statusAtual = progAtual ? progAtual.status : 'draft';
+    const isAdmin = !isAgente && sessao?.perfil === 'admin';
+    const isAnalistaAP = sessao?.perfil === 'analista_ap';
+
+    // Botão de Parecer AP — visível ao Analista Preliminar DESIGNADO quando ap_enviado
+    if(btnParecer){
+      const isAnalistaDesignado = isAnalistaAP && (
+        !progAtual?.analistaApId ||               // sem designação → qualquer analista AP
+        progAtual.analistaApId === sessao?.id     // designado especificamente
+      );
+      const podeParecer =
+        (isAnalistaDesignado && statusAtual === 'ap_enviado') ||
+        (isAdmin && statusAtual === 'at_enviado');
+      btnParecer.style.display = podeParecer ? 'inline-flex' : 'none';
+      if(statusAtual === 'ap_enviado') btnParecer.textContent = '📋 Parecer — An. Preliminar';
+      else if(statusAtual === 'at_enviado') btnParecer.textContent = '📋 Parecer — An. Técnica';
+    }
+
+    // Botão de Encaminhar para AT — visível ao Analista Preliminar DESIGNADO quando AP aprovada
+    if(btnEncaminhar){
+      const isAnalistaDesignado = isAnalistaAP && (
+        !progAtual?.analistaApId ||
+        progAtual.analistaApId === sessao?.id
+      );
+      const podeEncaminhar = isAnalistaDesignado && statusAtual === 'ap_aprovado';
+      btnEncaminhar.style.display = podeEncaminhar ? 'inline-flex' : 'none';
+    }
+  }
+  atualizarWfBarEBotaoParecer();
+  window.atualizarWfBarEBotaoParecer = atualizarWfBarEBotaoParecer;
+
+  // showSaveFeedback hook into new elements
+  const origSaveStatus = document.getElementById('saveStatus');
+  const agentSaveStatus = document.getElementById('agentSaveStatus');
+  // Monkey-patch showSaveFeedback to also update new elements
+  const _origFn = window.showSaveFeedback;
+  if(typeof salvarTudo !== 'undefined'){
+    // Already defined; override status display
+  }
+})();
+</script>
+<!-- CSS EXTRA: MODAL PARECER V2 -->
+<style>
+/* Sobrescreve estilos antigos do parecer */
+.overlay-parecer{position:fixed;inset:0;background:rgba(11,18,34,.7);backdrop-filter:blur(4px);z-index:600;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay-parecer.open{display:flex}
+.parecer-shell{background:#fff;border-radius:18px;width:100%;max-width:960px;max-height:94vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.35)}
+
+/* Header */
+.parecer-shell-hdr{background:linear-gradient(135deg,#0B2545 0%,#163B6E 100%);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.parecer-shell-label{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:2px}
+.parecer-shell-title{font-size:16px;font-weight:700;color:#fff}
+.parecer-shell-subtitle{font-size:11.5px;color:rgba(255,255,255,.5);margin-top:1px}
+.parecer-shell-close{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);font-size:18px;cursor:pointer;width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;font-family:inherit;transition:all .15s}
+.parecer-shell-close:hover{background:rgba(220,38,38,.4);color:#fff}
+
+/* PO strip */
+.parecer-po-strip{display:flex;border-bottom:1px solid #E2E6EC;flex-shrink:0;background:#F7F8FB}
+.parecer-po-item{padding:8px 16px;border-right:1px solid #E2E6EC;flex:1}
+.parecer-po-item:last-child{border-right:none}
+.parecer-po-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:1px}
+.parecer-po-val{font-size:12.5px;font-weight:600;color:#111827}
+
+/* Steps bar */
+.parecer-steps-bar{display:flex;align-items:center;padding:10px 24px;border-bottom:1px solid #E2E6EC;background:#fff;flex-shrink:0;overflow-x:auto;gap:0}
+.parecer-wf-step{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.parecer-wf-dot{width:24px;height:24px;border-radius:50%;border:2px solid #C5CDD8;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9CA3AF;background:#fff;flex-shrink:0;font-weight:700}
+.parecer-wf-dot.p-done{background:#16a34a;border-color:#16a34a;color:#fff}
+.parecer-wf-dot.p-active{background:#0B82C6;border-color:#0B82C6;color:#fff;box-shadow:0 0 0 3px rgba(11,130,198,.15)}
+.parecer-wf-dot.p-warn{background:#d97706;border-color:#d97706;color:#fff}
+.parecer-wf-dot.p-ok{background:#16a34a;border-color:#16a34a;color:#fff}
+.parecer-wf-lbl{font-size:11px;font-weight:600;color:#9CA3AF}
+.parecer-wf-lbl.p-active{color:#0B82C6}
+.parecer-wf-lbl.p-done,.parecer-wf-lbl.p-ok{color:#16a34a}
+.parecer-wf-lbl.p-warn{color:#d97706}
+.parecer-wf-conn{width:24px;height:2px;background:#E2E6EC;flex-shrink:0;margin:0 2px}
+.parecer-wf-conn.p-done{background:#16a34a}
+
+/* Body */
+.parecer-body-wrap{display:flex;flex:1;overflow:hidden;min-height:0}
+
+/* Coluna esquerda: histórico */
+.parecer-hist-col{width:230px;flex-shrink:0;border-right:1px solid #E2E6EC;overflow-y:auto;padding:12px;background:#F7F8FB}
+.parecer-hist-title{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.parecer-hist-empty{text-align:center;padding:20px 8px;color:#9CA3AF;font-size:11.5px;background:#fff;border-radius:7px;border:1px solid #E2E6EC}
+.ph-item{border-radius:8px;padding:9px 11px;margin-bottom:8px;border:1px solid;font-size:11.5px;line-height:1.5}
+.ph-item.revisao{background:rgba(217,119,6,.05);border-color:rgba(217,119,6,.2)}
+.ph-item.aprovado{background:rgba(22,163,74,.05);border-color:rgba(22,163,74,.2)}
+.ph-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;margin-bottom:5px}
+.ph-badge.revisao{background:rgba(217,119,6,.1);color:#92400e;border:1px solid rgba(217,119,6,.3)}
+.ph-badge.aprovado{background:rgba(22,163,74,.1);color:#14532d;border:1px solid rgba(22,163,74,.3)}
+.ph-aba-tag{font-size:10px;color:#6D28D9;background:#F5F3FF;border:1px solid #DDD6FE;padding:1px 6px;border-radius:10px;display:inline-flex;margin-bottom:4px}
+.ph-text{color:#111827;margin-bottom:4px;font-size:11.5px}
+.ph-meta{font-size:10px;color:#9CA3AF}
+
+/* Coluna direita: formulário */
+.parecer-form-col{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+
+/* Abas de seção */
+.parecer-abas-wrap{border-bottom:1px solid #E2E6EC;background:#F7F8FB;flex-shrink:0;padding:10px 20px}
+.parecer-aba-select-wrap{display:flex;align-items:center;gap:10px}
+.parecer-aba-select-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;white-space:nowrap;flex-shrink:0}
+.parecer-aba-select{
+  flex:1;padding:8px 12px;
+  border:1.5px solid #C5CDD8;border-radius:8px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:500;
+  color:#111827;background:#fff;cursor:pointer;outline:none;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;
+  padding-right:32px;transition:border-color .15s,box-shadow .15s;
+}
+.parecer-aba-select:focus{border-color:#0B82C6;box-shadow:0 0 0 3px rgba(11,130,198,.1)}
+.parecer-aba-count-badge{
+  flex-shrink:0;display:inline-flex;align-items:center;gap:5px;
+  padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;
+  background:#EFF6FF;border:1.5px solid #BFDBFE;color:#0B82C6;white-space:nowrap;
+}
+.parecer-aba-count-badge.has-items{background:#EFF6FF;border-color:#0B82C6;color:#096fa8}
+
+/* Conteúdo da aba */
+.parecer-aba-content{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+.parecer-aba-desc{font-size:12.5px;color:#4B5563;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px 13px;line-height:1.55}
+
+/* Apontamentos */
+.apontamentos-list{display:flex;flex-direction:column;gap:8px}
+.apontamento-item{display:flex;gap:8px;align-items:flex-start;background:#fff;border:1px solid #E2E6EC;border-radius:9px;padding:10px 12px;transition:border-color .15s}
+.apontamento-item:focus-within{border-color:#0B82C6}
+.apontamento-num{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:#0B2545;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.apontamento-textarea{flex:1;border:none;outline:none;font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:#111827;line-height:1.6;resize:none;min-height:48px;background:transparent}
+.apontamento-del{flex-shrink:0;background:none;border:none;cursor:pointer;color:#D1D5DB;font-size:16px;padding:2px;transition:color .15s;line-height:1}
+.apontamento-del:hover{color:#DC2626}
+.btn-add-apontamento{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:8px;border:1.5px dashed #C5CDD8;background:transparent;color:#6B7280;font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;font-weight:500;cursor:pointer;transition:all .15s;width:100%;justify-content:center}
+.btn-add-apontamento:hover{border-color:#0B82C6;color:#0B82C6;background:#EFF6FF}
+.parecer-err-msg{display:none;color:#DC2626;font-size:12px;font-weight:600;background:#FEF2F2;border:1px solid #FECACA;border-radius:7px;padding:8px 12px;align-items:center;gap:6px}
+.parecer-err-msg.show{display:flex}
+
+/* Decisão */
+.parecer-decisao{padding:14px 20px;border-top:1px solid #E2E6EC;background:#fff;flex-shrink:0}
+.parecer-decisao-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin-bottom:10px}
+.pac-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pac{border:2px solid #E2E6EC;border-radius:10px;padding:12px 14px;cursor:pointer;transition:all .15s;background:#fff;text-align:left;font-family:inherit;width:100%}
+.pac:hover{transform:translateY(-1px)}
+.pac.pac-warn:hover{border-color:#d97706;background:#fffbeb}
+.pac.pac-ok:hover{border-color:#16a34a;background:#f0fdf4}
+.pac-ico{font-size:20px;margin-bottom:5px;display:block}
+.pac-name{font-size:13px;font-weight:700;color:#111827;margin-bottom:2px}
+.pac-desc{font-size:11px;color:#4B5563;line-height:1.4}
+
+/* Footer */
+.parecer-ftr{padding:10px 20px;border-top:1px solid #E2E6EC;display:flex;justify-content:space-between;align-items:center;background:#F7F8FB;flex-shrink:0;gap:10px}
+.parecer-ftr-note{font-size:11px;color:#9CA3AF}
+.btn-ftr-cancel{background:#fff;border:1px solid #C5CDD8;color:#4B5563;padding:7px 14px;border-radius:7px;font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-ftr-cancel:hover{background:#F0F2F6}
+.btn-download-pdf{display:inline-flex;align-items:center;gap:6px;background:#0B2545;border:none;color:#fff;padding:7px 14px;border-radius:7px;font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-download-pdf:hover{background:#163B6E}
+</style>
+
+<!-- MODAL: PARECER TÉCNICO (Admin/AnalistaAP) -->
+<div class="overlay-parecer" id="overlayParecerAdmin">
+  <div class="parecer-shell">
+    <div class="parecer-shell-hdr">
+      <div>
+        <div class="parecer-shell-label">ENBPar · Programa Luz para Todos</div>
+        <div class="parecer-shell-title" id="parecerModalTitulo">📋 Parecer Técnico</div>
+        <div class="parecer-shell-subtitle" id="parecerModalSub">Registre apontamentos por aba do Programa de Obras</div>
+      </div>
+      <button class="parecer-shell-close" onclick="fecharModalParecerAdmin()">×</button>
+    </div>
+    <div class="parecer-po-strip" id="parecerAdminPoInfo"></div>
+    <div class="parecer-steps-bar" id="parecerAdminStepsBar"></div>
+    <div class="parecer-body-wrap">
+
+      <!-- Histórico -->
+      <div class="parecer-hist-col">
+        <div class="parecer-hist-title">
+          <span>Histórico</span>
+          <span id="parecerAdminCount"></span>
+        </div>
+        <div id="parecerAdminHistory"></div>
+      </div>
+
+      <!-- Formulário com abas -->
+      <div class="parecer-form-col">
+        <div class="parecer-abas-wrap">
+          <div class="parecer-aba-select-wrap">
+            <span class="parecer-aba-select-label">Aba do PO</span>
+            <select class="parecer-aba-select" id="parecerAbas" onchange="onAbaSelectChange(this)"></select>
+            <span class="parecer-aba-count-badge" id="parecerAbaBadge">0 apontamentos</span>
+          </div>
+        </div>
+        <div class="parecer-aba-content" id="parecerAbaContent">
+          <div class="parecer-aba-desc" id="parecerAbaDesc"></div>
+          <div class="apontamentos-list" id="apontamentosList"></div>
+          <button class="btn-add-apontamento" onclick="addApontamento()">+ Adicionar apontamento nesta aba</button>
+          <div class="parecer-err-msg" id="parecerErrMsg">⚠ Adicione ao menos um apontamento antes de prosseguir.</div>
+        </div>
+        <div class="parecer-decisao">
+          <div class="parecer-decisao-label">Decisão do analista</div>
+          <div class="pac-grid">
+            <button class="pac pac-warn" onclick="registrarParecerAdmin('revisao')">
+              <span class="pac-ico">🔁</span>
+              <div class="pac-name">Solicitar Ajustes</div>
+              <div class="pac-desc">Retorna ao agente para correções com base nos apontamentos registrados.</div>
+            </button>
+            <button class="pac pac-ok" onclick="registrarParecerAdmin('aprovado')">
+              <span class="pac-ico">✅</span>
+              <div class="pac-name">Aprovar Programa</div>
+              <div class="pac-desc">Aprovação definitiva desta etapa. O agente será notificado.</div>
+            </button>
+          </div>
+        </div>
+        <div class="parecer-ftr">
+          <span class="parecer-ftr-note" id="parecerFtrNote">Os apontamentos ficam registrados e visíveis ao agente.</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn-ftr-cancel" onclick="fecharModalParecerAdmin()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   PARECER TÉCNICO V2 — com apontamentos por aba + PDF
+   ========================================================= */
+
+// Mapa de abas por modelo (ref → título)
+const ABAS_RDR = [
+  { ref:'1.1', titulo:'Resumo das Características' },
+  { ref:'1.2', titulo:'Resumo da Rede' },
+  { ref:'1.3', titulo:'Resumo Financeiro' },
+  { ref:'1.4', titulo:'Cronograma Físico Financeiro' },
+  { ref:'2.1', titulo:'Rede Primária' },
+  { ref:'2.1.1', titulo:'Adição de Fase MT' },
+  { ref:'2.1.2', titulo:'Reforço MT' },
+  { ref:'2.2', titulo:'Rede Secundária' },
+  { ref:'2.3', titulo:'Rede Conjugada' },
+  { ref:'2.3.1', titulo:'Adição de Fase BT' },
+  { ref:'2.3.2', titulo:'Reforço BT' },
+  { ref:'3.1', titulo:'Posto de Transformação' },
+  { ref:'3.1.1', titulo:'Regulador de Tensão' },
+  { ref:'3.1.2', titulo:'Religador' },
+  { ref:'3.1.3', titulo:'Banco Capacitor Fixo' },
+  { ref:'3.1.4', titulo:'Seccionalizador' },
+  { ref:'4.1', titulo:'Padrão de Entrada' },
+  { ref:'4.2', titulo:'Kit de Instalação Interna' },
+  { ref:'5.1', titulo:'Unidades Consumidoras Previstas' },
+  { ref:'5.2', titulo:'UCs Coletivas' },
+  { ref:'5.3', titulo:'Mapa da Região' },
+  { ref:'6.1', titulo:'Subestação — Composição' },
+  { ref:'6.2', titulo:'Subestação — Equipamentos' },
+  { ref:'0', titulo:'Qualificação das UCs' },
+];
+const ABAS_SIGFI = [
+  { ref:'1.1', titulo:'Resumo Financeiro' },
+  { ref:'1.2', titulo:'Resumo do Programa' },
+  { ref:'1.3', titulo:'Totalização' },
+  { ref:'1.4', titulo:'Cronograma Físico Financeiro' },
+  { ref:'2.1', titulo:'Dados das Comunidades' },
+  { ref:'2.2', titulo:'Levantamento de Consumo' },
+  { ref:'3.1', titulo:'Material — Geração' },
+  { ref:'3.2', titulo:'MOT — Geração' },
+  { ref:'3.3', titulo:'Transporte de Carga' },
+  { ref:'3.4', titulo:'Transporte de Pessoal' },
+  { ref:'3.5', titulo:'Padrão de Entrada' },
+  { ref:'3.6', titulo:'Kit de Instalação Interna' },
+  { ref:'3.7', titulo:'MOT — Módulos Adicionais' },
+  { ref:'4.1', titulo:'Unidades Consumidoras Previstas' },
+  { ref:'4.2', titulo:'UCs Coletivas' },
+  { ref:'4.3', titulo:'Mapa da Região' },
+  { ref:'0', titulo:'Qualificação das UCs' },
+];
+
+function getAbasModelo(modelo) {
+  return modelo === 'sigfi' ? ABAS_SIGFI : ABAS_RDR;
+}
+
+// Estado do parecer em edição
+let _parecerAbaAtiva = 0;
+let _parecerApontamentos = {}; // { ref: ['texto1','texto2',...] }
+
+const WF_STEPS_PAR = [
+  { id:'draft', label:'Preenchimento', icon:'✏' },
+  { id:'ap_enviado', label:'An. Preliminar', icon:'🔎' },
+  { id:'ap_aprovado', label:'AP Aprovada', icon:'✔' },
+  { id:'at_enviado', label:'An. Técnica', icon:'🔍' },
+  { id:'aprovado', label:'Aprovado', icon:'✅' },
+];
+const WF_ORDER_PAR = ['draft','ap_enviado','ap_revisao','ap_aprovado','at_enviado','at_revisao','aprovado'];
+const STATUS_TO_STEP_IDX = {
+  draft:0, ap_enviado:1, ap_revisao:1, ap_aprovado:2, at_enviado:3, at_revisao:3, aprovado:4
+};
+
+function buildStepsBarPo(status, containerId) {
+  const bar = document.getElementById(containerId);
+  if (!bar) return;
+  bar.innerHTML = '';
+  const curIdx = STATUS_TO_STEP_IDX[status] ?? 0;
+  WF_STEPS_PAR.forEach((step, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'parecer-wf-step';
+    let dotCls = '', lblCls = '';
+    if (i < curIdx) { dotCls = 'p-done'; lblCls = 'p-done'; }
+    else if (i === curIdx) {
+      if (status === 'aprovado') { dotCls = 'p-ok'; lblCls = 'p-ok'; }
+      else if (status === 'ap_revisao' || status === 'at_revisao') { dotCls = 'p-warn'; lblCls = 'p-warn'; }
+      else { dotCls = 'p-active'; lblCls = 'p-active'; }
+    }
+    wrap.innerHTML = `<div class="parecer-wf-dot ${dotCls}">${i < curIdx ? '✓' : step.icon}</div><div class="parecer-wf-lbl ${lblCls}">${step.label}</div>`;
+    bar.appendChild(wrap);
+    if (i < WF_STEPS_PAR.length - 1) {
+      const conn = document.createElement('div');
+      conn.className = 'parecer-wf-conn' + (i < curIdx ? ' p-done' : '');
+      bar.appendChild(conn);
+    }
+  });
+}
+
+function renderHistoricoParecerAdmin(p) {
+  const hist = p.pareceres || [];
+  const container = document.getElementById('parecerAdminHistory');
+  const countEl = document.getElementById('parecerAdminCount');
+  if (countEl) countEl.textContent = hist.length > 0 ? hist.length : '';
+
+  if (hist.length === 0) {
+    container.innerHTML = '<div class="parecer-hist-empty">📭 Nenhum parecer registrado ainda.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  [...hist].reverse().forEach(par => {
+    const div = document.createElement('div');
+    div.className = `ph-item ${par.tipo}`;
+    const tipoLabel = par.tipo === 'aprovado' ? '✅ Aprovado' : '🔁 Ajustes';
+    const etapaLabel = par.etapa === 'ap' ? 'An. Preliminar' : 'An. Técnica';
+    // Montar apontamentos do histórico
+    let apontHtml = '';
+    if (par.apontamentos && par.apontamentos.length > 0) {
+      apontHtml = par.apontamentos.map(a =>
+        `<div class="ph-aba-tag">${a.ref} — ${a.titulo}</div>
+         <div class="ph-text">${a.textos.join('<br>')}</div>`
+      ).join('');
+    } else if (par.texto) {
+      apontHtml = `<div class="ph-text">${par.texto}</div>`;
+    }
+    div.innerHTML = `
+      <div class="ph-badge ${par.tipo}">${tipoLabel} · ${etapaLabel}</div>
+      ${apontHtml}
+      <div class="ph-meta">${par.autor} · ${par.data ? par.data.split('-').reverse().join('/') : '—'} ${par.hora ? 'às ' + par.hora : ''}</div>`;
+    container.appendChild(div);
+  });
+}
+
+function renderAbas(abas) {
+  const sel = document.getElementById('parecerAbas');
+  const currentRef = abas[_parecerAbaAtiva]?.ref;
+  sel.innerHTML = '';
+  abas.forEach((aba, i) => {
+    const qtd = (_parecerApontamentos[aba.ref] || []).filter(t => t.trim()).length;
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${aba.ref} — ${aba.titulo}${qtd > 0 ? '  (' + qtd + ')' : ''}`;
+    if (i === _parecerAbaAtiva) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  atualizarAbaBadge(abas);
+}
+
+function atualizarAbaBadge(abas) {
+  const aba = abas[_parecerAbaAtiva];
+  const badge = document.getElementById('parecerAbaBadge');
+  if (!badge || !aba) return;
+  const qtd = (_parecerApontamentos[aba.ref] || []).filter(t => t.trim()).length;
+  badge.textContent = qtd === 0 ? 'Sem apontamentos' : qtd + ' apontamento' + (qtd > 1 ? 's' : '');
+  badge.className = 'parecer-aba-count-badge' + (qtd > 0 ? ' has-items' : '');
+}
+
+function onAbaSelectChange(sel) {
+  // Salvar textarea atual antes de trocar
+  const abas = getAbasModelo(programa?.modelo || 'rdr');
+  const abaAtual = abas[_parecerAbaAtiva];
+  if (abaAtual) {
+    const textareas = document.querySelectorAll('#apontamentosList .apontamento-textarea');
+    _parecerApontamentos[abaAtual.ref] = Array.from(textareas).map(t => t.value);
+  }
+  _parecerAbaAtiva = parseInt(sel.value);
+  renderAbaContent(abas);
+  atualizarAbaBadge(abas);
+}
+
+function renderAbaContent(abas) {
+  const aba = abas[_parecerAbaAtiva];
+  document.getElementById('parecerAbaDesc').textContent = `Aba ${aba.ref} — ${aba.titulo}: registre os apontamentos técnicos identificados nesta seção do Programa de Obras.`;
+  renderApontamentos(aba.ref);
+}
+
+function renderApontamentos(ref) {
+  const list = document.getElementById('apontamentosList');
+  list.innerHTML = '';
+  const textos = _parecerApontamentos[ref] || [];
+  if (textos.length === 0) {
+    _parecerApontamentos[ref] = [''];
+    textos.push('');
+  }
+  textos.forEach((txt, idx) => {
+    const item = document.createElement('div');
+    item.className = 'apontamento-item';
+    item.innerHTML = `
+      <div class="apontamento-num">${idx + 1}</div>
+      <textarea class="apontamento-textarea" rows="2" placeholder="Descreva o apontamento técnico para esta aba…">${txt}</textarea>
+      ${textos.length > 1 ? `<button class="apontamento-del" onclick="removeApontamento('${ref}',${idx})" title="Remover">×</button>` : ''}`;
+    item.querySelector('textarea').addEventListener('input', e => {
+      _parecerApontamentos[ref][idx] = e.target.value;
+      const abas = getAbasModelo(programa?.modelo || 'rdr');
+      atualizarAbaBadge(abas);
+      renderAbas(abas);
+    });
+    list.appendChild(item);
+  });
+}
+
+function addApontamento() {
+  const abas = getAbasModelo(programa?.modelo || 'rdr');
+  const ref = abas[_parecerAbaAtiva].ref;
+  if (!_parecerApontamentos[ref]) _parecerApontamentos[ref] = [];
+  _parecerApontamentos[ref].push('');
+  renderApontamentos(ref);
+  renderAbas(abas);
+  atualizarAbaBadge(abas);
+  setTimeout(() => {
+    const list = document.getElementById('apontamentosList');
+    const textareas = list.querySelectorAll('textarea');
+    if (textareas.length) textareas[textareas.length - 1].focus();
+  }, 50);
+}
+
+function removeApontamento(ref, idx) {
+  _parecerApontamentos[ref].splice(idx, 1);
+  renderApontamentos(ref);
+  const abas = getAbasModelo(programa?.modelo || 'rdr');
+  renderAbas(abas);
+  atualizarAbaBadge(abas);
+}
+
+function abrirModalParecer() {
+  const p = programa;
+  if (!p) return;
+  const etapa = (p.status === 'ap_enviado') ? 'ap' : 'at';
+  const etapaLabel = etapa === 'ap' ? 'Análise Preliminar' : 'Análise Técnica e Orçamentária';
+
+  // Título
+  document.getElementById('parecerModalTitulo').textContent = `📋 Parecer — ${etapaLabel}`;
+  document.getElementById('parecerModalSub').textContent = etapa === 'ap'
+    ? 'Valide a inclusão dos arquivos e abas iniciais do programa.'
+    : 'Valide técnica e orçamentariamente o Programa de Obras completo.';
+
+  // Info strip
+  document.getElementById('parecerAdminPoInfo').innerHTML = `
+    <div class="parecer-po-item"><div class="parecer-po-lbl">Programa</div><div class="parecer-po-val">${p.nome}</div></div>
+    <div class="parecer-po-item"><div class="parecer-po-lbl">Código</div><div class="parecer-po-val" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px">${p.codigo}</div></div>
+    <div class="parecer-po-item"><div class="parecer-po-lbl">Agente</div><div class="parecer-po-val">${p.agente || '—'}</div></div>
+    <div class="parecer-po-item"><div class="parecer-po-lbl">${etapa === 'ap' ? 'Analista AP' : 'Modelo'}</div><div class="parecer-po-val">${etapa === 'ap' ? (p.analistaAp || '—') : (p.modelo ? p.modelo.toUpperCase() : '—')}</div></div>`;
+
+  buildStepsBarPo(p.status || 'draft', 'parecerAdminStepsBar');
+  renderHistoricoParecerAdmin(p);
+
+  // Reset apontamentos
+  _parecerApontamentos = {};
+  _parecerAbaAtiva = 0;
+  const abas = getAbasModelo(p.modelo || 'rdr');
+  renderAbas(abas);
+  renderAbaContent(abas);
+  document.getElementById('parecerErrMsg').classList.remove('show');
+
+  document.getElementById('overlayParecerAdmin').classList.add('open');
+}
+
+function fecharModalParecerAdmin() {
+  document.getElementById('overlayParecerAdmin').classList.remove('open');
+}
+
+function registrarParecerAdmin(tipo) {
+  const p = programa;
+  if (!p) return;
+
+  // Validar: pelo menos um apontamento preenchido em qualquer aba
+  const abas = getAbasModelo(p.modelo || 'rdr');
+  // Sincronizar textarea atual antes de salvar
+  const textareas = document.querySelectorAll('#apontamentosList .apontamento-textarea');
+  const abaAtiva = abas[_parecerAbaAtiva];
+  if (abaAtiva) {
+    _parecerApontamentos[abaAtiva.ref] = Array.from(textareas).map(t => t.value);
+  }
+
+  const todosApontamentos = abas
+    .map(aba => ({
+      ref: aba.ref,
+      titulo: aba.titulo,
+      textos: (_parecerApontamentos[aba.ref] || []).filter(t => t.trim())
+    }))
+    .filter(a => a.textos.length > 0);
+
+  if (todosApontamentos.length === 0) {
+    document.getElementById('parecerErrMsg').classList.add('show');
+    setTimeout(() => document.getElementById('parecerErrMsg').classList.remove('show'), 3000);
+    return;
+  }
+
+  const etapa = (p.status === 'ap_enviado') ? 'ap' : 'at';
+  let novoStatus;
+  if (tipo === 'revisao') {
+    novoStatus = etapa === 'ap' ? 'ap_revisao' : 'at_revisao';
+  } else {
+    novoStatus = etapa === 'ap' ? 'ap_aprovado' : 'aprovado';
+  }
+
+  const agora = new Date();
+  const parecer = {
+    tipo,
+    etapa,
+    apontamentos: todosApontamentos,
+    texto: todosApontamentos.map(a => `[${a.ref} — ${a.titulo}]\n${a.textos.join('\n')}`).join('\n\n'),
+    autor: getSessao()?.nome || 'Analista',
+    data: agora.toISOString().slice(0, 10),
+    hora: agora.toTimeString().slice(0, 5)
+  };
+
+  const _progAtual = await getPrograma();
+  await updatePrograma({ status: novoStatus, pareceres: [...(_progAtual?.pareceres || []), parecer] });
+  fecharModalParecerAdmin();
+  await atualizarStatusLabel();
+  atualizarBotaoEnviar();
+  await exibirBannerParecer();
+  if (typeof atualizarWfBarEBotaoParecer === 'function') atualizarWfBarEBotaoParecer();
+
+  const msgs = {
+    ap_revisao: '🔁 Ajustes solicitados — Análise Preliminar.',
+    ap_aprovado: '✔ Análise Preliminar aprovada!',
+    at_revisao: '🔁 Ajustes solicitados — Análise Técnica.',
+    aprovado: '✅ Programa de Obras Aprovado!'
+  };
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:100px;right:28px;z-index:999;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.2);max-width:340px;line-height:1.4;';
+  toast.style.background = tipo === 'aprovado' ? (novoStatus === 'aprovado' ? '#16a34a' : '#6D28D9') : '#d97706';
+  toast.textContent = msgs[novoStatus] || '✓ Parecer registrado.';
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 3000);
+}
+
+document.getElementById('overlayParecerAdmin').addEventListener('click', e => {
+  if (e.target === document.getElementById('overlayParecerAdmin')) fecharModalParecerAdmin();
+});
+
+/* =========================================================
+   ENCAMINHAR PARA AT
+   ========================================================= */
+async function encaminharParaAT() {
+  const p = await getPrograma();
+  if (!p || p.status !== 'ap_aprovado') return;
+  const btn = document.getElementById('btnEncaminharAT');
+  if (btn.dataset.confirming !== 'true') {
+    btn.dataset.confirming = 'true';
+    btn.textContent = '⚠ Confirmar encaminhamento?';
+    btn.style.background = 'rgba(139,92,246,.4)';
+    setTimeout(() => { btn.dataset.confirming = ''; btn.textContent = '🔄 Encaminhar para Análise Técnica'; btn.style.background = ''; }, 3000);
+    return;
+  }
+  btn.dataset.confirming = '';
+  await updatePrograma({ status: 'at_enviado' });
+  atualizarStatusLabel();
+  atualizarBotaoEnviar();
+  if (typeof atualizarWfBarEBotaoParecer === 'function') atualizarWfBarEBotaoParecer();
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:100px;right:28px;z-index:999;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;background:#6D28D9;box-shadow:0 8px 24px rgba(0,0,0,.2)';
+  toast.textContent = '🔄 PO encaminhado para Análise Técnica!';
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 3000);
+}
+
+/* =========================================================
+   DOWNLOAD PDF DO PARECER
+   ========================================================= */
+function gerarPDFParecer(par, programa) {
+  const etapaLabel = par.etapa === 'ap' ? 'Análise Preliminar' : 'Análise Técnica e Orçamentária';
+  const tipoLabel  = par.tipo === 'aprovado' ? 'APROVADO' : 'AJUSTES SOLICITADOS';
+  const tipoColor  = par.tipo === 'aprovado' ? '#16a34a' : '#d97706';
+  const dataFmt    = par.data ? par.data.split('-').reverse().join('/') : '—';
+  const modelo     = (programa.modelo || '').toUpperCase();
+
+  let apontamentosHtml = '';
+  if (par.apontamentos && par.apontamentos.length > 0) {
+    apontamentosHtml = par.apontamentos.map(a => `
+      <div style="margin-bottom:16px;border-left:3px solid #0B82C6;padding-left:12px">
+        <div style="font-size:11px;font-weight:700;color:#0B82C6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
+          Aba ${a.ref} — ${a.titulo}
+        </div>
+        ${a.textos.map((t,i) => `<div style="margin-bottom:6px;font-size:13px;color:#111827;padding:8px 10px;background:#F7F8FB;border-radius:6px"><span style="font-weight:700;color:#6B7280">${i+1}.</span> ${t}</div>`).join('')}
+      </div>`).join('');
+  } else if (par.texto) {
+    apontamentosHtml = `<div style="font-size:13px;line-height:1.7;color:#111827;white-space:pre-wrap">${par.texto}</div>`;
+  }
+
+  const docHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+  <title>Parecer Técnico — ${programa.codigo}</title>
+  <style>
+    body{font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:0;color:#111827}
+    .page{max-width:760px;margin:0 auto;padding:40px 48px}
+    .hdr{background:#0B2545;color:#fff;padding:24px 32px;border-radius:10px 10px 0 0}
+    .hdr-marca{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:4px}
+    .hdr-titulo{font-size:20px;font-weight:700}
+    .hdr-sub{font-size:12px;color:rgba(255,255,255,.55);margin-top:3px}
+    .ficha{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #E2E6EC;margin:20px 0;border-radius:6px;overflow:hidden}
+    .fi{padding:10px 14px;border-right:1px solid #E2E6EC;border-bottom:1px solid #E2E6EC}
+    .fi:nth-child(2n){border-right:none}
+    .fi:nth-last-child(-n+2){border-bottom:none}
+    .fi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px}
+    .fi-val{font-size:13px;font-weight:600;color:#111827}
+    .decisao-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:20px;font-size:13px;font-weight:700;border:2px solid;margin-bottom:20px}
+    .sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid #E2E6EC}
+    .assinatura{margin-top:40px;padding-top:16px;border-top:1px solid #E2E6EC;font-size:11.5px;color:#6B7280}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  </style>
+  </head><body><div class="page">
+    <div class="hdr">
+      <div class="hdr-marca">ENBPar · Programa Luz para Todos · Documento Oficial</div>
+      <div class="hdr-titulo">Parecer Técnico — ${etapaLabel}</div>
+      <div class="hdr-sub">Programa de Obras ${programa.codigo} — ${programa.nome}</div>
+    </div>
+    <div class="ficha">
+      <div class="fi"><div class="fi-lbl">Programa de Obras</div><div class="fi-val">${programa.nome}</div></div>
+      <div class="fi"><div class="fi-lbl">Código</div><div class="fi-val" style="font-family:monospace">${programa.codigo}</div></div>
+      <div class="fi"><div class="fi-lbl">Agente Executor</div><div class="fi-val">${programa.agente || '—'}</div></div>
+      <div class="fi"><div class="fi-lbl">Modelo</div><div class="fi-val">${modelo}</div></div>
+      <div class="fi"><div class="fi-lbl">Analista</div><div class="fi-val">${par.autor}</div></div>
+      <div class="fi"><div class="fi-lbl">Data do Parecer</div><div class="fi-val">${dataFmt} às ${par.hora}</div></div>
+    </div>
+    <div class="decisao-badge" style="color:${tipoColor};border-color:${tipoColor};background:${tipoColor}18">
+      ${par.tipo === 'aprovado' ? '✅' : '🔁'} ${tipoLabel}
+    </div>
+    <div class="sec-title">Apontamentos Técnicos por Aba</div>
+    ${apontamentosHtml}
+    <div class="assinatura">
+      <strong>Analista Responsável:</strong> ${par.autor}<br>
+      <strong>Data:</strong> ${dataFmt} às ${par.hora}<br>
+      <strong>Etapa:</strong> ${etapaLabel}<br>
+      <strong>Documento gerado pela Plataforma SGPO — ENBPar</strong>
+    </div>
+  </div></body></html>`;
+
+  const blob = new Blob([docHtml], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (win) {
+    win.onload = () => {
+      setTimeout(() => { win.print(); URL.revokeObjectURL(url); }, 400);
+    };
+  }
+}
+
+// Expor globalmente para o visualizador de parecer do agente
+window.gerarPDFParecer = gerarPDFParecer;
+</script>
+</body>
+</html>

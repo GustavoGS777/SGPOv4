@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script>
+  /* ── JSONBIN CONFIG ── */
+  const JSONBIN_API_KEY = "$2a$10$Wm38/lGALLta4chHp7NwVOb31uBXGpV0T9SSHg0m4nIk8mgZZptRu";
+  const BIN_PROGRAMAS  = "6a3e73bdda38895dfe02a10b";
+  const BIN_PO_DADOS   = "6a3e73a9da38895dfe02a0a1";
+  const JSONBIN_BASE   = "https://api.jsonbin.io/v3/b";
+  const JB_HEADERS     = { "Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY };
+
+  /* ── PROGRAMAS ── */
+  async function loadProgramas() {
+    try {
+      const r = await fetch(`${JSONBIN_BASE}/${BIN_PROGRAMAS}/latest`, { headers: JB_HEADERS });
+      const j = await r.json();
+      return j.record?.dados || [];
+    } catch(e) { console.error('loadProgramas:', e); return []; }
+  }
+  async function saveProgramas(lista) {
+    await fetch(`${JSONBIN_BASE}/${BIN_PROGRAMAS}`, {
+      method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: lista })
+    });
+  }
+  async function addPrograma(programa) {
+    const lista = await loadProgramas();
+    lista.push(programa);
+    await saveProgramas(lista);
+  }
+  async function updateProgramaFS(id, changes) {
+    const lista = await loadProgramas();
+    const idx = lista.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    Object.assign(lista[idx], changes);
+    await saveProgramas(lista);
+  }
+  async function deleteProgramaFS(id) {
+    const lista = await loadProgramas();
+    await saveProgramas(lista.filter(p => p.id !== id));
+  }
+
+  /* ── PO_DADOS ── */
+  async function _loadTodosDados() {
+    try {
+      const r = await fetch(`${JSONBIN_BASE}/${BIN_PO_DADOS}/latest`, { headers: JB_HEADERS });
+      const j = await r.json();
+      return j.record?.dados || {};
+    } catch(e) { return {}; }
+  }
+  async function loadDadosFS(poId) {
+    if (!poId) return {};
+    const todos = await _loadTodosDados();
+    return todos[poId] || {};
+  }
+  async function saveDadosFS(poId, dados) {
+    if (!poId) return;
+    const todos = await _loadTodosDados();
+    todos[poId] = dados;
+    await fetch(`${JSONBIN_BASE}/${BIN_PO_DADOS}`, {
+      method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: todos })
+    });
+  }
+</script>
+<script>
+  /* ── GUARD DE SESSÃO: primeiro script do <head> ── */
+  (function(){
+    try {
+      var raw = localStorage.getItem('plataforma_po_sessao');
+      var s = raw ? JSON.parse(raw) : null;
+      if (!s) { window.location.replace('./login.html'); document.documentElement.style.display='none'; return; }
+      if (s.loginAt && (Date.now() - s.loginAt) > 8*3600*1000) {
+        localStorage.removeItem('plataforma_po_sessao');
+        window.location.replace('./login.html'); document.documentElement.style.display='none'; return;
+      }
+      if(s.perfil==='admin'){window.location.replace('./dashboard_programas_obras.html');document.documentElement.style.display='none';return;} if(s.perfil==='analista_ap'){window.location.replace('./analise_preliminar.html');document.documentElement.style.display='none';return;} if(s.perfil!=='agente'){window.location.replace('./login.html');document.documentElement.style.display='none';return;}
+    } catch(e) { window.location.replace('./login.html'); document.documentElement.style.display='none'; }
+  })();
+</script>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Plataforma de Obras — Meus Programas</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B2545;--navy2:#163B6E;
+  --primary:#0B82C6;--primary2:#096fa8;--primary-lt:#EFF6FF;
+  --accent:#A5C715;--accent2:#8aaa0f;--accent-lt:#F7FEE7;
+  --red:#DC2626;--ok:#16a34a;--ok-lt:#f0fdf4;--warn:#d97706;--warn-lt:#fffbeb;
+  --blue:#2563EB;--blue-lt:#EFF6FF;
+  --surf:#F0F4F8;--surf2:#F7F9FC;
+  --bdr:#D1D9E0;--bdr2:#B0BEC5;
+  --txt:#111827;--txt2:#4B5563;--txt3:#9CA3AF;
+  --r:8px;--rlg:12px;
+}
+body{font-family:"IBM Plex Sans",sans-serif;font-size:14px;color:var(--txt);background:var(--surf);min-height:100vh}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:248px;background:linear-gradient(180deg,var(--navy) 0%,var(--navy2) 100%);color:#fff;display:flex;flex-direction:column;z-index:100;box-shadow:4px 0 16px rgba(0,0,0,.15)}
+.sb-logo{padding:18px 18px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-logos{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sb-logo-wrap{background:#fff;border-radius:8px;padding:5px 10px;display:inline-flex;align-items:center}
+.sb-logo-div{width:1px;height:26px;background:rgba(255,255,255,.2)}
+.sb-title{font-size:11px;color:rgba(255,255,255,.42);font-weight:500;letter-spacing:.3px}
+.sb-nav{flex:1;padding:14px 10px;overflow-y:auto}
+.sb-section{font-size:10px;font-weight:700;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:1px;padding:0 8px;margin:14px 0 5px}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:rgba(255,255,255,.58);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;text-decoration:none}
+.sb-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.sb-item.active{background:rgba(11,130,198,.35);color:#fff;border-left:3px solid var(--primary);border-radius:0 8px 8px 0;padding-left:9px}
+.sb-item .ico{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.sb-footer{padding:14px 18px;border-top:1px solid rgba(255,255,255,.08)}
+.sb-user{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sb-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.sb-user-info .sb-name{font-size:13px;font-weight:600;color:#fff}
+.sb-user-info .sb-role{font-size:11px;color:rgba(255,255,255,.4)}
+.logout-btn{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:6px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.25);color:#FCA5A5;font-size:12px;cursor:pointer;font-family:"IBM Plex Sans",sans-serif;transition:all .15s;width:100%;justify-content:center}
+.logout-btn:hover{background:rgba(220,38,38,.25)}
+.main{margin-left:248px;min-height:100vh;display:flex;flex-direction:column}
+.topbar{background:#fff;border-bottom:1px solid var(--bdr);padding:14px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.topbar-title{font-size:18px;font-weight:700;color:var(--navy)}
+.topbar-sub{font-size:12px;color:var(--txt3);margin-top:1px}
+.content{padding:28px 32px 60px;flex:1}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.stat-card{background:#fff;border:1px solid var(--bdr);border-radius:var(--rlg);padding:18px 20px;position:relative;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px}
+.stat-card.c-blue::before{background:var(--blue)}.stat-card.c-warn::before{background:var(--warn)}.stat-card.c-ok::before{background:var(--ok)}.stat-card.c-accent::before{background:var(--accent2)}
+.stat-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}
+.stat-card.c-blue .stat-icon{background:var(--blue-lt)}.stat-card.c-warn .stat-icon{background:var(--warn-lt)}.stat-card.c-ok .stat-icon{background:var(--ok-lt)}.stat-card.c-accent .stat-icon{background:var(--accent-lt)}
+.stat-val{font-size:30px;font-weight:700;color:var(--navy);font-family:"IBM Plex Mono",monospace}
+.stat-lbl{font-size:12px;color:var(--txt2);margin-top:3px;font-weight:500}
+.stat-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+.stat-sub.warn{color:var(--warn)}
+.sec-hdr{margin-bottom:16px}
+.sec-title{font-size:16px;font-weight:700;color:var(--navy)}
+.sec-sub{font-size:12px;color:var(--txt3);margin-top:1px}
+.po-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.po-card{background:#fff;border:1px solid var(--bdr);border-radius:var(--rlg);padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.04);cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:14px}
+.po-card:hover{border-color:var(--primary);transform:translateY(-2px);box-shadow:0 6px 20px rgba(11,130,198,.1)}
+.po-card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.po-card-title{font-size:15px;font-weight:700;color:var(--txt);margin-bottom:3px}
+.po-card-code{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--txt3)}
+.tag{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;border:1px solid}
+.tag-rdr{color:var(--primary);border-color:rgba(11,130,198,.3);background:var(--primary-lt)}
+.tag-rdrx{color:#7C3AED;border-color:rgba(124,58,237,.3);background:#F5F3FF}
+.tag-sigfi{color:var(--accent2);border-color:rgba(138,170,15,.35);background:var(--accent-lt)}
+.po-card-meta{font-size:12.5px;color:var(--txt2);display:flex;flex-direction:column;gap:4px}
+.status-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600}
+.status-badge::before{content:"";width:7px;height:7px;border-radius:50%;display:block;flex-shrink:0}
+.status-badge.draft{color:var(--txt3)}.status-badge.draft::before{background:var(--txt3)}
+.status-badge.review{color:var(--primary)}.status-badge.review::before{background:var(--primary)}
+.status-badge.warn{color:var(--warn)}.status-badge.warn::before{background:var(--warn)}
+.status-badge.approved{color:var(--ok)}.status-badge.approved::before{background:var(--ok)}
+.progress-row{display:flex;flex-direction:column;gap:5px}
+.progress-label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt3)}
+.progress-bar{width:100%;height:5px;background:var(--bdr);border-radius:3px;overflow:hidden}
+.progress-bar>div{height:100%;background:var(--accent);border-radius:3px}
+.po-card-footer{display:flex;justify-content:flex-end;border-top:1px solid #EEF2F6;padding-top:12px}
+.po-card-footer .arrow{color:var(--primary);font-weight:700;font-size:13px}
+.empty-state{display:flex;flex-direction:column;align-items:center;text-align:center;padding:64px 24px;background:#fff;border:1px solid var(--bdr);border-radius:var(--rlg);box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.empty-icon{font-size:32px;color:var(--bdr);margin-bottom:14px}
+.empty-state h3{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:6px}
+.empty-state p{font-size:13px;color:var(--txt2);max-width:380px;line-height:1.6}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logos"><span style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;color:#fff;letter-spacing:.5px;opacity:.9">ENBPar · Luz para Todos</span></div>
+    <div class="sb-title">Sistema de Gestão de Programas de Obras</div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-section">Principal</div>
+    <a class="sb-item active" href="meus_pos.html"><span class="ico">📂</span> Meus Programas</a>
+  </nav>
+  <div class="sb-footer">
+    <div class="sb-user">
+      <div class="sb-avatar">A</div>
+      <div class="sb-user-info">
+        <div class="sb-name" id="sbAgentName">Agente</div>
+        <div class="sb-role" id="sbAgentRole">Agente Executor</div>
+      </div>
+    </div>
+    <button class="logout-btn" id="logoutBtn">🚪 Sair do sistema</button>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Meus Programas de Obras</div>
+      <div class="topbar-sub">Programas designados ao seu usuário — preencha e envie para análise</div>
+    </div>
+    <div id="sessionPill" style="font-size:12px;color:var(--txt3);padding:6px 14px;border:1px solid var(--bdr);border-radius:999px;background:#fff"></div>
+  </div>
+  <div class="content">
+    <div class="stats">
+      <div class="stat-card c-blue"><div class="stat-icon">📋</div><div class="stat-val" id="kpiTotal">0</div><div class="stat-lbl">POs designados</div><div class="stat-sub" id="kpiTotalSub">—</div></div>
+      <div class="stat-card c-accent"><div class="stat-icon">📝</div><div class="stat-val" id="kpiDraft">0</div><div class="stat-lbl">Rascunho</div><div class="stat-sub">Aguardando preenchimento</div></div>
+      <div class="stat-card c-warn"><div class="stat-icon">🔁</div><div class="stat-val" id="kpiRevisao">0</div><div class="stat-lbl">Em revisão (ajustes)</div><div class="stat-sub warn" id="kpiRevisaoSub">—</div></div>
+      <div class="stat-card c-ok"><div class="stat-icon">✅</div><div class="stat-val" id="kpiAprovado">0</div><div class="stat-lbl">Aprovados</div><div class="stat-sub">POs concluídos</div></div>
+    </div>
+    <div class="sec-hdr">
+      <div class="sec-title">Programas designados</div>
+      <div class="sec-sub">Clique em um card para abrir o formulário de preenchimento</div>
+    </div>
+    <div class="po-grid" id="poGrid"></div>
+    <div class="empty-state" id="emptyState" style="display:none">
+      <div class="empty-icon">📂</div>
+      <h3>Nenhum Programa de Obras designado</h3>
+      <p>Quando o Administrador designar um PO ao seu usuário, ele aparecerá aqui para preenchimento.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_SESSION_KEY = 'plataforma_po_sessao';
+
+  const MODEL_LABELS = {
+    rdr: { tag: 'tag-rdr', short: 'RDR', full: 'RDR — Redes Rurais' },
+    rdrx: { tag: 'tag-rdrx', short: 'RDR-X', full: 'RDR-X — Metas Excepcionais' },
+    sigfi: { tag: 'tag-sigfi', short: 'SIGFI', full: 'SIGFI — Sistemas Isolados' }
+  };
+  const STATUS_LABELS = {
+    draft: { class: 'draft', label: 'Rascunho' },
+    enviado: { class: 'review', label: 'Enviado p/ Análise' },
+    revisao: { class: 'warn', label: 'Em Revisão (ajustes)' },
+    aprovado: { class: 'approved', label: 'Aprovado' }
+  };
+
+  function getSessao(){
+    try {
+      const raw = localStorage.getItem(STORAGE_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch(e){ return null; }
+  }
+
+  const sessao = getSessao();
+  if(!sessao){
+    window.location.href = './login.html';
+  } else if(sessao.perfil !== 'agente'){
+    window.location.href = './dashboard_programas_obras.html';
+  }
+
+  if(sessao){
+    document.getElementById('sessionPill').textContent = `${sessao.nome} · ${sessao.agenteExecutor || 'Agente Executor'}`;
+  if(document.getElementById('sbAgentName')) document.getElementById('sbAgentName').textContent = sessao.nome;
+  }
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    localStorage.removeItem(STORAGE_SESSION_KEY);
+    window.location.href = './login.html';
+  });
+
+  async function loadMeusPOs(){
+    try {
+      const todos = await loadProgramas(); // loadProgramas vem do bloco JSONBin
+      return todos
+        .filter(p => p.responsavelId === sessao.id)
+        .sort((a,b) => (b.criadoEm||'').localeCompare(a.criadoEm||''));
+    } catch(e){ return []; }
+  }
+
+  function formatDate(iso){
+    if(!iso) return '—';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  const poGrid = document.getElementById('poGrid');
+  const emptyState = document.getElementById('emptyState');
+
+  function render(){
+    const programas = loadProgramas().filter(p => p.responsavelId === sessao.id);
+
+    poGrid.innerHTML = '';
+    if(programas.length === 0){
+      poGrid.style.display = 'none';
+      emptyState.style.display = 'flex';
+    } else {
+      poGrid.style.display = 'grid';
+      emptyState.style.display = 'none';
+      programas.forEach(p => poGrid.appendChild(renderCard(p)));
+    }
+
+    updateKPIs(programas);
+  }
+
+  function renderCard(p){
+    const modelInfo = MODEL_LABELS[p.modelo];
+    const statusInfo = STATUS_LABELS[p.status] || STATUS_LABELS.draft;
+    const progresso = p.progresso || 0;
+    const investimento = p.investimento ? Number(p.investimento).toLocaleString('pt-BR') : '—';
+
+    const card = document.createElement('div');
+    card.className = 'po-card';
+    card.innerHTML = `
+      <div class="po-card-header">
+        <div>
+          <div class="po-card-title">${p.nome}</div>
+          <div class="po-card-code">${p.codigo}</div>
+        </div>
+        <span class="tag ${modelInfo.tag}">${modelInfo.short}</span>
+      </div>
+      <div class="po-card-meta">
+        <span>Investimento estimado: <strong>${investimento}</strong> (R$ x1000)</span>
+        <span>Criado em ${formatDate(p.criadoEm)}</span>
+        <span><span class="status-badge ${statusInfo.class}">${statusInfo.label}</span></span>
+      </div>
+      <div class="progress-row">
+        <div class="progress-label">
+          <span>Preenchimento</span>
+          <span>${progresso}%</span>
+        </div>
+        <div class="progress-bar"><div style="width:${progresso}%"></div></div>
+      </div>
+      <div class="po-card-footer">
+        <span class="arrow">Abrir PO →</span>
+      </div>
+    `;
+    card.addEventListener('click', () => {
+      window.location.href = `po_preenchimento.html?modelo=${p.modelo}&id=${p.id}`;
+    });
+    return card;
+  }
+
+  function updateKPIs(programas){
+    document.getElementById('kpiTotal').textContent = programas.length;
+    document.getElementById('kpiTotalSub').textContent = programas.length === 0
+      ? 'Nenhum PO designado'
+      : `${programas.length} programa(s)`;
+
+    const draft = programas.filter(p => p.status === 'draft').length;
+    document.getElementById('kpiDraft').textContent = draft;
+
+    const revisao = programas.filter(p => p.status === 'revisao').length;
+    document.getElementById('kpiRevisao').textContent = revisao;
+    document.getElementById('kpiRevisaoSub').textContent = revisao === 0 ? 'Nenhuma pendência' : 'Requer ajustes do analista';
+
+    const aprovado = programas.filter(p => p.status === 'aprovado').length;
+    document.getElementById('kpiAprovado').textContent = aprovado;
+  }
+
+  if(sessao && sessao.perfil === 'agente'){
+    render();
+  }
+</script>
+
+</body>
+</html>

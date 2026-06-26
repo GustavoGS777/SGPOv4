@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script>
+  /* ── JSONBIN CONFIG ── */
+  const JSONBIN_API_KEY = "$2a$10$Wm38/lGALLta4chHp7NwVOb31uBXGpV0T9SSHg0m4nIk8mgZZptRu";
+  const BIN_PROGRAMAS  = "6a3e73bdda38895dfe02a10b";
+  const BIN_PO_DADOS   = "6a3e73a9da38895dfe02a0a1";
+  const JSONBIN_BASE   = "https://api.jsonbin.io/v3/b";
+  const JB_HEADERS     = { "Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY };
+
+  /* ── PROGRAMAS ── */
+  async function loadProgramas() {
+    try {
+      const r = await fetch(`${JSONBIN_BASE}/${BIN_PROGRAMAS}/latest`, { headers: JB_HEADERS });
+      const j = await r.json();
+      return j.record?.dados || [];
+    } catch(e) { console.error('loadProgramas:', e); return []; }
+  }
+  async function saveProgramas(lista) {
+    await fetch(`${JSONBIN_BASE}/${BIN_PROGRAMAS}`, {
+      method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: lista })
+    });
+  }
+  async function addPrograma(programa) {
+    const lista = await loadProgramas();
+    lista.push(programa);
+    await saveProgramas(lista);
+  }
+  async function updateProgramaFS(id, changes) {
+    const lista = await loadProgramas();
+    const idx = lista.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    Object.assign(lista[idx], changes);
+    await saveProgramas(lista);
+  }
+  async function deleteProgramaFS(id) {
+    const lista = await loadProgramas();
+    await saveProgramas(lista.filter(p => p.id !== id));
+  }
+
+  /* ── PO_DADOS ── */
+  async function _loadTodosDados() {
+    try {
+      const r = await fetch(`${JSONBIN_BASE}/${BIN_PO_DADOS}/latest`, { headers: JB_HEADERS });
+      const j = await r.json();
+      return j.record?.dados || {};
+    } catch(e) { return {}; }
+  }
+  async function loadDadosFS(poId) {
+    if (!poId) return {};
+    const todos = await _loadTodosDados();
+    return todos[poId] || {};
+  }
+  async function saveDadosFS(poId, dados) {
+    if (!poId) return;
+    const todos = await _loadTodosDados();
+    todos[poId] = dados;
+    await fetch(`${JSONBIN_BASE}/${BIN_PO_DADOS}`, {
+      method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: todos })
+    });
+  }
+</script>
+<script>
+  /* ── GUARD DE SESSÃO: primeiro script do <head> ── */
+  (function(){
+    try {
+      var raw = localStorage.getItem('plataforma_po_sessao');
+      var s = raw ? JSON.parse(raw) : null;
+      if (!s) { window.location.replace('./login.html'); document.documentElement.style.display='none'; return; }
+      if (s.loginAt && (Date.now() - s.loginAt) > 8*3600*1000) {
+        localStorage.removeItem('plataforma_po_sessao');
+        window.location.replace('./login.html'); document.documentElement.style.display='none'; return;
+      }
+      if(s.perfil==='admin'){window.location.replace('./dashboard_programas_obras.html');document.documentElement.style.display='none';return;} if(s.perfil==='agente'){window.location.replace('./meus_pos.html');document.documentElement.style.display='none';return;} if(s.perfil!=='analista_ap'){window.location.replace('./login.html');document.documentElement.style.display='none';return;}
+    } catch(e) { window.location.replace('./login.html'); document.documentElement.style.display='none'; }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Análise Preliminar — ENBPar</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B2545;--navy2:#163B6E;
+  --primary:#0B82C6;--primary2:#096fa8;--primary-lt:#EFF6FF;
+  --accent:#A5C715;--accent2:#8aaa0f;
+  --ap:#7C3AED;--ap2:#6D28D9;--ap-lt:#F5F3FF;--ap-mid:#DDD6FE;
+  --ok:#16a34a;--ok-lt:#f0fdf4;
+  --warn:#d97706;--warn-lt:#fffbeb;
+  --red:#DC2626;--red-lt:#FEF2F2;--red-mid:#FECACA;
+  --surf:#F7F8FB;--surf2:#F0F2F6;
+  --bdr:#E2E6EC;--bdr2:#C5CDD8;
+  --txt:#111827;--txt2:#4B5563;--txt3:#9CA3AF;
+  --r:8px;--rlg:12px;
+}
+body{font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:var(--txt);background:var(--surf);min-height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:248px;background:linear-gradient(180deg,var(--navy) 0%,var(--navy2) 100%);color:#fff;display:flex;flex-direction:column;z-index:100;box-shadow:4px 0 16px rgba(0,0,0,.15)}
+.sb-brand{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-logos{display:flex;align-items:center;gap:8px;background:#fff;border-radius:8px;padding:7px 10px;margin-bottom:10px}
+.sb-logo{height:28px;width:auto}
+.sb-logo-div{width:1px;height:20px;background:#ddd}
+.sb-title{font-size:11px;font-weight:600;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.6px}
+.sb-subtitle{font-size:13px;font-weight:700;color:#fff;margin-top:2px}
+.sb-perfil{margin:12px 16px;background:rgba(124,58,237,.2);border:1px solid rgba(124,58,237,.35);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px}
+.sb-perfil-icon{font-size:18px}
+.sb-perfil-nome{font-size:12px;font-weight:600;color:#C4B5FD}
+.sb-perfil-cargo{font-size:11px;color:rgba(255,255,255,.4);margin-top:1px}
+.sb-nav{flex:1;padding:8px 0;overflow-y:auto}
+.sb-section{padding:10px 20px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.28)}
+.sb-item{display:flex;align-items:center;gap:10px;padding:10px 20px;color:rgba(255,255,255,.7);text-decoration:none;font-size:13px;font-weight:500;transition:all .15s;border:none;background:none;cursor:pointer;width:100%;text-align:left}
+.sb-item:hover,.sb-item.active{background:rgba(255,255,255,.08);color:#fff}
+.sb-item.active{border-left:3px solid var(--ap);padding-left:17px}
+.sb-footer{padding:16px;border-top:1px solid rgba(255,255,255,.08)}
+.sb-logout{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:8px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.25);color:#FCA5A5;font-size:12.5px;font-weight:500;cursor:pointer;transition:all .15s;width:100%;font-family:inherit}
+.sb-logout:hover{background:rgba(220,38,38,.25)}
+
+/* ── TOPBAR ── */
+.topbar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--bdr);padding:14px 32px;display:flex;align-items:center;justify-content:space-between;margin-left:248px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.topbar-title{font-size:17px;font-weight:700;color:var(--navy)}
+.topbar-sub{font-size:12px;color:var(--txt3);margin-top:1px}
+.topbar-right{display:flex;align-items:center;gap:12px}
+
+/* ── MAIN ── */
+.main{margin-left:248px;padding:28px 32px 60px}
+
+/* ── STATS ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.stat-card{background:#fff;border-radius:var(--rlg);padding:20px 20px 16px;border:1px solid var(--bdr);border-top:4px solid;position:relative;overflow:hidden}
+.stat-card.c-ap{border-top-color:var(--ap)}
+.stat-card.c-ok{border-top-color:var(--ok)}
+.stat-card.c-warn{border-top-color:var(--warn)}
+.stat-card.c-blue{border-top-color:var(--primary)}
+.stat-icon{font-size:22px;margin-bottom:8px}
+.stat-val{font-size:28px;font-weight:700;color:var(--navy);font-family:'IBM Plex Mono',monospace;margin-bottom:2px}
+.stat-lbl{font-size:12px;font-weight:600;color:var(--txt2)}
+.stat-sub{font-size:11.5px;color:var(--txt3);margin-top:3px}
+
+/* ── FILTROS ── */
+.filters{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center}
+.filter-btn{padding:6px 14px;border-radius:20px;border:1.5px solid var(--bdr2);background:#fff;font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;font-weight:600;color:var(--txt2);cursor:pointer;transition:all .15s}
+.filter-btn:hover{border-color:var(--ap);color:var(--ap)}
+.filter-btn.active{background:var(--ap-lt);border-color:var(--ap);color:var(--ap2)}
+.search-box{padding:8px 12px;border:1.5px solid var(--bdr);border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:13px;outline:none;min-width:220px}
+.search-box:focus{border-color:var(--ap)}
+
+/* ── TABLE ── */
+.card{background:#fff;border-radius:var(--rlg);border:1px solid var(--bdr);overflow:hidden}
+.card-hdr{padding:16px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between}
+.card-hdr-title{font-size:14px;font-weight:700;color:var(--navy)}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{background:var(--navy);color:rgba(255,255,255,.85);padding:10px 16px;font-size:11px;font-weight:600;text-align:left;letter-spacing:.3px;white-space:nowrap}
+.tbl td{padding:13px 16px;border-bottom:1px solid var(--bdr);font-size:13px;vertical-align:middle}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover td{background:#F7F0FF}
+.status-badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:20px;border:1.5px solid;white-space:nowrap}
+.sb-ap{background:var(--ap-lt);color:var(--ap2);border-color:var(--ap-mid)}
+.sb-revisao{background:var(--warn-lt);color:var(--warn);border-color:#FDE68A}
+.sb-aprovado{background:var(--ok-lt);color:var(--ok);border-color:#BBF7D0}
+.sb-draft{background:var(--surf2);color:var(--txt3);border-color:var(--bdr2)}
+.sb-outros{background:var(--primary-lt);color:var(--primary2);border-color:#BFDBFE}
+.tbl-empty{text-align:center;padding:48px 20px;color:var(--txt3)}
+.tbl-empty .ico{font-size:36px;margin-bottom:8px}
+.btn-abrir{padding:6px 14px;border-radius:7px;border:1.5px solid var(--ap-mid);background:var(--ap-lt);color:var(--ap2);font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-abrir:hover{background:var(--ap);color:#fff;border-color:var(--ap2)}
+.badge-ap-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.25);color:var(--ap2);font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px}
+.model-tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:var(--surf2);color:var(--txt2);font-family:'IBM Plex Mono',monospace}
+.nome-po{font-weight:600;color:var(--navy);margin-bottom:2px}
+.cod-po{font-size:11.5px;color:var(--txt3);font-family:'IBM Plex Mono',monospace}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sb-brand">
+    <div class="sb-logos"><span style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;color:#fff;letter-spacing:.5px;opacity:.9">ENBPar · Luz para Todos</span></div>
+    <div class="sb-title">Plataforma PO</div>
+    <div class="sb-subtitle">Análise Preliminar</div>
+  </div>
+  <div class="sb-perfil">
+    <div class="sb-perfil-icon">🔎</div>
+    <div>
+      <div class="sb-perfil-nome" id="sbNome">Analista</div>
+      <div class="sb-perfil-cargo">Analista Preliminar</div>
+    </div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-section">Painel</div>
+    <button class="sb-item active">📋 Programas de Obras</button>
+  </nav>
+  <div class="sb-footer">
+    <button class="sb-logout" onclick="logout()">🚪 Sair da plataforma</button>
+  </div>
+</aside>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div>
+    <div class="topbar-title">🔎 Análise Preliminar de Programas de Obras</div>
+    <div class="topbar-sub">Visualize, analise e registre pareceres dos POs enviados para Análise Preliminar</div>
+  </div>
+  <div class="topbar-right">
+    <span style="font-size:12px;color:var(--txt3)" id="topbarUser"></span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat-card c-ap">
+      <div class="stat-icon">🔎</div>
+      <div class="stat-val" id="kpiAguardando">0</div>
+      <div class="stat-lbl">Aguardando Análise</div>
+      <div class="stat-sub" id="kpiAguardandoSub">Nenhum PO pendente</div>
+    </div>
+    <div class="stat-card c-warn">
+      <div class="stat-icon">🔁</div>
+      <div class="stat-val" id="kpiRevisao">0</div>
+      <div class="stat-lbl">Em Revisão</div>
+      <div class="stat-sub">Aguardando ajustes do agente</div>
+    </div>
+    <div class="stat-card c-ok">
+      <div class="stat-icon">✔</div>
+      <div class="stat-val" id="kpiAprovadosAP">0</div>
+      <div class="stat-lbl">AP Aprovados</div>
+      <div class="stat-sub">Seguiram para An. Técnica</div>
+    </div>
+    <div class="stat-card c-blue">
+      <div class="stat-icon">📋</div>
+      <div class="stat-val" id="kpiTotal">0</div>
+      <div class="stat-lbl">Total de POs</div>
+      <div class="stat-sub">Todos os programas</div>
+    </div>
+  </div>
+
+  <!-- FILTROS + TABELA -->
+  <div class="filters">
+    <button class="filter-btn active" data-filter="ap_enviado" onclick="setFilter('ap_enviado',this)">🔎 Aguardando Análise</button>
+    <button class="filter-btn" data-filter="ap_revisao" onclick="setFilter('ap_revisao',this)">🔁 Em Revisão</button>
+    <button class="filter-btn" data-filter="ap_aprovado" onclick="setFilter('ap_aprovado',this)">✔ AP Aprovados</button>
+    <button class="filter-btn" data-filter="all" onclick="setFilter('all',this)">📋 Todos os POs</button>
+    <input type="search" class="search-box" id="searchBox" placeholder="🔍  Buscar por nome ou código…" oninput="renderTabela()">
+  </div>
+
+  <div class="card">
+    <div class="card-hdr">
+      <div class="card-hdr-title">Programas de Obras</div>
+      <span style="font-size:12px;color:var(--txt3)" id="countLabel"></span>
+    </div>
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Programa / Código</th>
+          <th>Agente Executor</th>
+          <th>Modelo</th>
+          <th>Preenchimento</th>
+          <th>Status</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody id="tblBody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+/* =========================================================
+   UTILS — sessão (localStorage) + Firestore
+   ========================================================= */
+const STORAGE_SESSION_KEY   = 'plataforma_po_sessao';
+const STORAGE_USERS_KEY     = 'plataforma_po_usuarios';
+const STORAGE_USERS_VERSION_KEY = 'plataforma_po_usuarios_versao';
+const USERS_VERSION         = '6';
+
+const DEFAULT_USERS = [
+  { id: 'u_admin',       nome: 'Equipe Técnica ENBPar',     login: 'EnbparATO',   senha: 'Teste123',  perfil: 'admin' },
+  { id: 'u_analista_ap', nome: 'Analista Preliminar ENBPar', login: 'AnalistaAP',  senha: 'AP@2026',   perfil: 'analista_ap' },
+  { id: 'u_equatorial',  nome: 'Equatorial Energia',         login: 'AE1',         senha: 'Teste123',  perfil: 'agente', agenteExecutor: 'Equatorial' },
+];
+
+function getSessao(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_SESSION_KEY) || 'null'); } catch(e){ return null; }
+}
+async function loadProgramasAnalista(){
+  try {
+    const todos = await loadProgramas(); // loadProgramas vem do bloco JSONBin
+    return todos
+      .filter(p => p.analistaApId === sessao.id)
+      .sort((a,b) => (b.criadoEm||'').localeCompare(a.criadoEm||''));
+  } catch(e){ console.error('loadProgramasAnalista:', e); return []; }
+}
+
+const sessao = getSessao();
+
+/* =========================================================
+   INIT
+   ========================================================= */
+if(sessao){
+  document.getElementById('sbNome').textContent = sessao.nome || 'Analista';
+  document.getElementById('topbarUser').textContent = 'Conectado como: ' + sessao.nome;
+}
+
+function logout(){
+  localStorage.removeItem(STORAGE_SESSION_KEY);
+  window.location.href = './login.html';
+}
+
+/* =========================================================
+   STATUS CONFIG
+   ========================================================= */
+const STATUS_CFG = {
+  draft:       { label:'Rascunho',                cls:'sb-draft',    show:'all'       },
+  ap_enviado:  { label:'Aguardando An. Preliminar', cls:'sb-ap',     show:'ap_enviado' },
+  ap_revisao:  { label:'An. Preliminar: Em Revisão', cls:'sb-revisao', show:'ap_revisao' },
+  ap_aprovado: { label:'An. Preliminar: Aprovada', cls:'sb-aprovado', show:'ap_aprovado' },
+  at_enviado:  { label:'Aguardando An. Técnica',   cls:'sb-outros',  show:'all'       },
+  at_revisao:  { label:'An. Técnica: Em Revisão',  cls:'sb-outros',  show:'all'       },
+  aprovado:    { label:'Aprovado',                 cls:'sb-aprovado', show:'all'      },
+};
+
+const MODEL_NAMES = { rdr:'RDR', rdrx:'RDR-X', sigfi:'SIGFI' };
+
+let _filter = 'ap_enviado';
+
+function setFilter(f, el){
+  _filter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderTabela();
+}
+
+/* =========================================================
+   KPIs
+   ========================================================= */
+function updateKPIs(programas){
+  const aguardando = programas.filter(p => p.status === 'ap_enviado').length;
+  const revisao    = programas.filter(p => p.status === 'ap_revisao').length;
+  const aprov      = programas.filter(p => ['ap_aprovado','at_enviado','at_revisao','aprovado'].includes(p.status)).length;
+  document.getElementById('kpiAguardando').textContent = aguardando;
+  document.getElementById('kpiAguardandoSub').textContent = aguardando === 0 ? 'Nenhum PO pendente' : 'PO(s) aguardando parecer';
+  document.getElementById('kpiRevisao').textContent = revisao;
+  document.getElementById('kpiAprovadosAP').textContent = aprov;
+  document.getElementById('kpiTotal').textContent = programas.length;
+}
+
+/* =========================================================
+   TABELA
+   ========================================================= */
+async function renderTabela(){
+  const programas = await loadProgramasAnalista();
+  updateKPIs(programas);
+
+  const q = (document.getElementById('searchBox')?.value || '').toLowerCase();
+  const filtrados = programas.filter(p => {
+    const statusMatch = _filter === 'all' || p.status === _filter;
+    const txtMatch = !q || (p.nome||'').toLowerCase().includes(q) || (p.codigo||'').toLowerCase().includes(q);
+    return statusMatch && txtMatch;
+  });
+
+  const tbody = document.getElementById('tblBody');
+  tbody.innerHTML = '';
+
+  document.getElementById('countLabel').textContent = filtrados.length + ' programa(s)';
+
+  if(filtrados.length === 0){
+    tbody.innerHTML = `<tr><td colspan="6" class="tbl-empty">
+      <div class="ico">📭</div>
+      <div>Nenhum programa encontrado para o filtro selecionado.</div>
+    </td></tr>`;
+    return;
+  }
+
+  filtrados.forEach(p => {
+    const cfg = STATUS_CFG[p.status] || STATUS_CFG.draft;
+    const progresso = p.progresso || 0;
+    const temParecer = p.pareceres && p.pareceres.some(par => par.etapa === 'ap');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div class="nome-po">${p.nome || '—'}</div>
+        <div class="cod-po">${p.codigo || '—'}</div>
+      </td>
+      <td>${p.agente || '—'}</td>
+      <td><span class="model-tag">${MODEL_NAMES[p.modelo] || p.modelo || '—'}</span></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:80px;height:5px;background:var(--bdr);border-radius:3px;overflow:hidden">
+            <div style="width:${progresso}%;height:100%;background:var(--ap);border-radius:3px"></div>
+          </div>
+          <span style="font-size:11.5px;font-weight:600;color:var(--txt2);font-family:'IBM Plex Mono',monospace">${progresso}%</span>
+        </div>
+      </td>
+      <td>
+        <span class="status-badge ${cfg.cls}">${cfg.label}</span>
+        ${temParecer ? '<div class="badge-ap-tag" style="margin-top:4px">📋 Com parecer AP</div>' : ''}
+      </td>
+      <td>
+        <button class="btn-abrir" onclick="abrirPO('${p.id}','${p.modelo}')">
+          ${p.status === 'ap_enviado' ? '📋 Analisar' : '↗ Abrir'}
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function abrirPO(id, modelo){
+  window.location.href = `./po_preenchimento.html?modelo=${modelo}&id=${id}`;
+}
+
+renderTabela(); // async
+</script>
+</body>
+</html>

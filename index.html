@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script>
+  // Redireciona para login se não houver sessão ativa
+  (function(){
+    try {
+      var s = JSON.parse(localStorage.getItem('plataforma_po_sessao') || 'null');
+      if (!s) { window.location.replace('./login.html'); return; }
+      if (s.loginAt && (Date.now() - s.loginAt) > 8*3600*1000) {
+        localStorage.removeItem('plataforma_po_sessao');
+        window.location.replace('./login.html'); return;
+      }
+      if (s.perfil === 'admin') { window.location.replace('./dashboard_programas_obras.html'); return; }
+      if (s.perfil === 'analista_ap') { window.location.replace('./analise_preliminar.html'); return; }
+      if (s.perfil === 'agente') { window.location.replace('./meus_pos.html'); return; }
+      window.location.replace('./login.html');
+    } catch(e) { window.location.replace('./login.html'); }
+  })();
+</script>
+<meta http-equiv="refresh" content="0;url=./login.html">
+<title>Plataforma de Obras</title>
+</head>
+<body></body>
+</html>

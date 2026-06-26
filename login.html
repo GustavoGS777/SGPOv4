@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Plataforma de Obras — Acesso</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B2545;--navy2:#163B6E;
+  --primary:#0B82C6;--primary2:#096fa8;--primary-lt:#EFF6FF;
+  --accent:#A5C715;--accent2:#8aaa0f;
+  --red:#DC2626;--red-lt:#FEF2F2;
+  --bdr:#D1D9E0;--txt:#111827;--txt2:#4B5563;--txt3:#9CA3AF;
+}
+body{font-family:"IBM Plex Sans",sans-serif;min-height:100vh;display:flex;flex-direction:column}
+
+.bg{
+  flex:1;display:flex;align-items:center;justify-content:center;min-height:100vh;
+  background:linear-gradient(145deg,var(--navy) 0%,var(--navy2) 60%,#0D3F6E 100%);
+  position:relative;overflow:hidden;padding:24px;
+}
+.bg::before{content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse at 15% 50%,rgba(11,130,198,.2) 0%,transparent 55%),
+             radial-gradient(ellipse at 85% 10%,rgba(165,199,21,.08) 0%,transparent 50%);}
+.circ{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.05);pointer-events:none}
+.c1{width:700px;height:700px;top:-280px;left:-200px}
+.c2{width:500px;height:500px;bottom:-180px;right:-150px}
+.c3{width:280px;height:280px;top:60px;right:80px;border-color:rgba(11,130,198,.1)}
+.c4{width:160px;height:160px;bottom:80px;left:60px;border-color:rgba(165,199,21,.1)}
+
+.card{
+  position:relative;z-index:1;background:#fff;
+  border-radius:24px;width:100%;max-width:500px;
+  box-shadow:0 32px 80px rgba(0,0,0,.35),0 8px 24px rgba(0,0,0,.18);
+  overflow:hidden;
+}
+.card-top{
+  background:linear-gradient(135deg,var(--primary) 0%,var(--primary2) 100%);
+  padding:28px 40px 44px;text-align:center;position:relative;overflow:hidden;
+}
+.card-top::after{
+  content:"";position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);
+  width:120%;height:56px;background:#fff;border-radius:50% 50% 0 0;
+}
+.card-top::before{
+  content:"";position:absolute;top:-60px;right:-60px;
+  width:200px;height:200px;border-radius:50%;
+  background:rgba(255,255,255,.06);
+}
+.logo-wrap{display:flex;justify-content:center;gap:14px;margin-bottom:10px;position:relative;z-index:1;align-items:center}
+.logo-bg{background:#fff;border-radius:14px;padding:8px 16px;
+  box-shadow:0 4px 20px rgba(0,0,0,.2);display:inline-flex;align-items:center}
+.logo-div{width:1px;height:32px;background:rgba(255,255,255,.35)}
+.card-top-title{font-size:12.5px;font-weight:500;color:rgba(255,255,255,.65);
+  letter-spacing:.5px;position:relative;z-index:1;margin-top:4px}
+
+.card-body{padding:32px 40px 36px}
+
+.screen{display:none}.screen.active{display:block}
+.screen-title{font-size:20px;font-weight:700;color:var(--navy);text-align:center;margin-bottom:6px}
+.screen-sub{font-size:13px;color:var(--txt2);text-align:center;margin-bottom:28px;line-height:1.45}
+
+.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:8px}
+.profile-btn{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:22px 16px;border-radius:14px;cursor:pointer;
+  border:2px solid var(--bdr);background:#fff;
+  transition:all .2s;position:relative;overflow:hidden;
+}
+.profile-btn::before{content:"";position:absolute;inset:0;opacity:0;transition:opacity .2s;}
+.profile-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.profile-btn.admin-btn:hover{border-color:var(--primary);}
+.profile-btn.admin-btn:hover::before{background:var(--primary-lt);opacity:1}
+.profile-btn.agent-btn:hover{border-color:var(--accent2);}
+.profile-btn.agent-btn:hover::before{background:#F7FEE7;opacity:1}
+.profile-btn.active-profile{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.profile-btn.admin-btn.active-profile{border-color:var(--primary);background:var(--primary-lt)}
+.profile-btn.agent-btn.active-profile{border-color:var(--accent2);background:#F7FEE7}
+.ap-btn:hover{border-color:#7C3AED;}
+.ap-btn:hover::before{background:#F5F3FF;opacity:1}
+.ap-btn.active-profile{border-color:#7C3AED;background:#F5F3FF}
+.ap-btn .profile-check{background:#7C3AED}
+
+.profile-icon{
+  width:56px;height:56px;border-radius:16px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:26px;position:relative;z-index:1;
+  box-shadow:0 4px 12px rgba(0,0,0,.1);
+}
+.admin-icon{background:linear-gradient(135deg,var(--primary),var(--primary2))}
+.agent-icon{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+
+.profile-label{font-size:13.5px;font-weight:700;color:var(--navy);position:relative;z-index:1;text-align:center;line-height:1.3}
+.profile-desc{font-size:11px;color:var(--txt3);position:relative;z-index:1;text-align:center;line-height:1.4}
+.profile-check{
+  position:absolute;top:10px;right:10px;width:20px;height:20px;
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#fff;opacity:0;transition:opacity .2s;z-index:2;
+}
+.admin-btn .profile-check{background:var(--primary)}
+.agent-btn .profile-check{background:var(--accent2)}
+.active-profile .profile-check{opacity:1}
+
+.back-link{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:12.5px;color:var(--txt2);cursor:pointer;
+  background:none;border:none;padding:0;font-family:"IBM Plex Sans",sans-serif;
+  margin-bottom:20px;transition:color .15s;
+}
+.back-link:hover{color:var(--primary)}
+
+.role-badge{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;
+  margin-bottom:22px;
+}
+.role-badge.admin{background:var(--primary-lt);color:var(--primary2);border:1.5px solid #BFDBFE}
+.role-badge.agente{background:#F7FEE7;color:var(--accent2);border:1.5px solid #BEF264}
+
+.form-lbl{display:block;font-size:11.5px;font-weight:600;color:var(--txt2);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.form-group{margin-bottom:16px}
+.inp-wrap{position:relative}
+.inp-wrap .ico{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.38}
+input[type=text],input[type=password]{
+  width:100%;padding:11px 12px 11px 40px;border:1.5px solid var(--bdr);
+  border-radius:10px;font-family:"IBM Plex Sans",sans-serif;font-size:14px;
+  color:var(--txt);outline:none;transition:border-color .15s,box-shadow .15s;background:#fff;
+}
+input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(11,130,198,.12)}
+.eye-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;cursor:pointer;font-size:16px;opacity:.4;
+  transition:opacity .15s;padding:0}
+.eye-btn:hover{opacity:.7}
+
+/* Demo creds helper */
+.demo-block{margin-top:10px;padding:12px 14px;background:#F7F9FC;border:1px solid var(--bdr);border-radius:10px}
+.demo-block-title{font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.demo-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-radius:7px;background:#fff;border:1px solid var(--bdr);cursor:pointer;transition:all .15s;margin-bottom:5px}
+.demo-item:last-child{margin-bottom:0}
+.demo-item:hover{border-color:var(--primary);background:var(--primary-lt)}
+.demo-item .dn{font-size:12.5px;font-weight:600;color:var(--txt)}
+.demo-item .dl{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--txt3)}
+
+.login-btn{
+  width:100%;padding:13px;border:none;border-radius:10px;
+  font-family:"IBM Plex Sans",sans-serif;font-size:15px;font-weight:600;
+  color:#fff;cursor:pointer;transition:all .2s;letter-spacing:.3px;margin-top:4px;
+}
+.login-btn.admin-btn-style{
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  box-shadow:0 4px 14px rgba(11,130,198,.35);
+}
+.login-btn.admin-btn-style:hover{box-shadow:0 6px 20px rgba(11,130,198,.45);transform:translateY(-1px)}
+.login-btn.agent-btn-style{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  box-shadow:0 4px 14px rgba(165,199,21,.35);color:var(--navy);
+}
+.login-btn.agent-btn-style:hover{box-shadow:0 6px 20px rgba(165,199,21,.4);transform:translateY(-1px)}
+.login-btn.ap-btn-style{background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;border:none;box-shadow:0 4px 14px rgba(124,58,237,.35)}
+.login-btn.ap-btn-style:hover{box-shadow:0 6px 20px rgba(124,58,237,.45);transform:translateY(-1px)}
+.login-btn:active{transform:translateY(0)}
+.login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
+.err-msg{background:var(--red-lt);border:1px solid #FECACA;border-radius:8px;
+  padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:14px;
+  display:none;align-items:center;gap:8px}
+.err-msg.show{display:flex}
+
+.footer-note{text-align:center;margin-top:20px;font-size:11.5px;color:var(--txt3);line-height:1.5}
+.badge-r{display:inline-flex;align-items:center;gap:4px;background:#FEF2F2;
+  border:1px solid #FECACA;color:var(--red);font-size:11px;padding:3px 10px;
+  border-radius:20px;font-weight:600}
+
+.spinner{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);
+  border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;
+  vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.version{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+  font-size:11px;color:rgba(255,255,255,.25);white-space:nowrap}
+@keyframes slideIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.screen.active{animation:slideIn .25s ease}
+</style>
+</head>
+<body>
+<div class="bg">
+  <div class="circ c1"></div><div class="circ c2"></div>
+  <div class="circ c3"></div><div class="circ c4"></div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="logo-wrap"><span style="font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;color:#0B2545;letter-spacing:.5px">ENBPar · Luz para Todos</span></div>
+      <div class="card-top-title">Sistema de Gestão de Programas de Obras</div>
+    </div>
+
+    <div class="card-body">
+
+      <!-- TELA 1: SELEÇÃO DE PERFIL -->
+      <div class="screen active" id="screen-select">
+        <div class="screen-title">Bem-vindo ao SGPO</div>
+        <div class="screen-sub">Selecione o seu perfil de acesso para continuar</div>
+
+        <div class="profile-grid">
+          <button class="profile-btn admin-btn" onclick="selectProfile('admin')">
+            <span class="profile-check">✓</span>
+            <div class="profile-icon admin-icon">🛡️</div>
+            <div class="profile-label">Administrador</div>
+            <div class="profile-desc">Gestão e análise dos Programas de Obras</div>
+          </button>
+          <button class="profile-btn agent-btn" onclick="selectProfile('agente')">
+            <span class="profile-check">✓</span>
+            <div class="profile-icon agent-icon">👷</div>
+            <div class="profile-label">Agente Executor</div>
+            <div class="profile-desc">Preenchimento e envio do Programa de Obras</div>
+          </button>
+          <button class="profile-btn ap-btn" onclick="selectProfile('analista_ap')">
+            <span class="profile-check">✓</span>
+            <div class="profile-icon" style="background:linear-gradient(135deg,#7C3AED,#6D28D9)">🔎</div>
+            <div class="profile-label">Analista Preliminar</div>
+            <div class="profile-desc">Análise e parecer preliminar dos Programas de Obras</div>
+          </button>
+        </div>
+
+        <div class="footer-note">
+          <span class="badge-r">🔒 Área Restrita · ENBPar</span><br><br>
+          Acesso exclusivo para usuários autorizados.<br>
+          Em caso de dúvidas, contate a equipe técnica ENBPar.
+        </div>
+      </div>
+
+      <!-- TELA 2: FORMULÁRIO DE LOGIN -->
+      <div class="screen" id="screen-login">
+        <button class="back-link" onclick="goBack()">← Voltar</button>
+
+        <div id="role-badge-wrap" style="display:flex;justify-content:center;margin-bottom:20px"></div>
+
+        <div class="err-msg" id="err-msg">
+          🔒 <span id="err-txt">Login ou senha inválidos.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-lbl">Login</label>
+          <div class="inp-wrap">
+            <span class="ico">👤</span>
+            <input type="text" id="login-user" placeholder="Seu login" autocomplete="username">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-lbl">Senha</label>
+          <div class="inp-wrap">
+            <span class="ico">🔑</span>
+            <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+            <button class="eye-btn" onclick="togglePwd()" id="eye-btn">👁</button>
+          </div>
+        </div>
+
+        <button class="login-btn admin-btn-style" id="login-btn" onclick="doLogin()">Entrar</button>
+
+        <div class="demo-block" id="demo-block">
+          <div class="demo-block-title">Acessos de demonstração — clique para preencher</div>
+          <div id="demo-list"></div>
+        </div>
+
+        <div class="footer-note" style="margin-top:16px">
+          Em caso de problemas com o acesso, contate a equipe técnica ENBPar.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="version">SGPO · v1.0 · ENBPar 2026</div>
+</div>
+
+<script>
+  /* =========================================================
+     USUÁRIOS / SESSÃO
+     ========================================================= */
+  const STORAGE_USERS_KEY = "plataforma_po_usuarios";
+  const STORAGE_SESSION_KEY = "plataforma_po_sessao";
+  const USERS_VERSION = "6";
+  const STORAGE_USERS_VERSION_KEY = "plataforma_po_usuarios_versao";
+
+  const DEFAULT_USERS = [
+    { id: "u_admin",        nome: "Equipe Técnica ENBPar",      login: "EnbparATO",        senha: "Teste123",   perfil: "admin" },
+    { id: "u_analista_ap",  nome: "Analista Preliminar ENBPar",  login: "AnalistaAP",       senha: "AP@2026",    perfil: "analista_ap" },
+    { id: "u_enbpar_agente",nome: "ENBPar — Sistemas Isolados",  login: "enbpar@agente.com",senha: "agente123",  perfil: "agente", agenteExecutor: "ENBPar" },
+    { id: "ag_neoenergia_bsb", nome: "Neoenergia Brasília",          login: "AE_NeoBSB",   senha: "Agente@2026", perfil: "agente", agenteExecutor: "Neoenergia Brasília" },
+    { id: "ag_equatorial_go",  nome: "Equatorial Goiás",             login: "AE_EqGO",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Equatorial Goiás" },
+    { id: "ag_cemig",          nome: "Cemig",                        login: "AE_Cemig",    senha: "Agente@2026", perfil: "agente", agenteExecutor: "Cemig" },
+    { id: "ag_light",          nome: "Light",                        login: "AE_Light",    senha: "Agente@2026", perfil: "agente", agenteExecutor: "Light" },
+    { id: "ag_enel_rio",       nome: "Enel Distribuição Rio",        login: "AE_EnelRJ",   senha: "Agente@2026", perfil: "agente", agenteExecutor: "Enel Distribuição Rio" },
+    { id: "ag_enel_sp",        nome: "Enel Distribuição São Paulo",  login: "AE_EnelSP",   senha: "Agente@2026", perfil: "agente", agenteExecutor: "Enel Distribuição São Paulo" },
+    { id: "ag_cpfl_paulista",  nome: "CPFL Paulista",                login: "AE_CPFLPau",  senha: "Agente@2026", perfil: "agente", agenteExecutor: "CPFL Paulista" },
+    { id: "ag_cpfl_pirat",     nome: "CPFL Piratininga",             login: "AE_CPFLPir",  senha: "Agente@2026", perfil: "agente", agenteExecutor: "CPFL Piratininga" },
+    { id: "ag_neo_elektro",    nome: "Neoenergia Elektro",           login: "AE_NeoElk",   senha: "Agente@2026", perfil: "agente", agenteExecutor: "Neoenergia Elektro" },
+    { id: "ag_edp_sp",         nome: "EDP São Paulo",                login: "AE_EDPSP",    senha: "Agente@2026", perfil: "agente", agenteExecutor: "EDP São Paulo" },
+    { id: "ag_neo_coelba",     nome: "Neoenergia Coelba",            login: "AE_NeoCoelba",senha: "Agente@2026", perfil: "agente", agenteExecutor: "Neoenergia Coelba" },
+    { id: "ag_copel",          nome: "Copel",                        login: "AE_Copel",    senha: "Agente@2026", perfil: "agente", agenteExecutor: "Copel" },
+    { id: "ag_ceee",           nome: "CEEE-D",                       login: "AE_CEEED",    senha: "Agente@2026", perfil: "agente", agenteExecutor: "CEEE-D" },
+    { id: "ag_rge_sul",        nome: "RGE Sul",                      login: "AE_RGESul",   senha: "Agente@2026", perfil: "agente", agenteExecutor: "RGE Sul" },
+    { id: "ag_eq_ma",          nome: "Equatorial Energia MA",        login: "AE_EqMA",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Equatorial Energia MA" },
+    { id: "ag_eq_pa",          nome: "Equatorial Energia PA",        login: "AE_EqPA",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Equatorial Energia PA" },
+    { id: "ag_eq_al",          nome: "Equatorial Energia AL",        login: "AE_EqAL",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Equatorial Energia AL" },
+    { id: "ag_eq_pi",          nome: "Equatorial Energia PI",        login: "AE_EqPI",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Equatorial Energia PI" },
+    { id: "ag_eq_ap",          nome: "Equatorial Energia AP",        login: "AE_EqAP",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Equatorial Energia AP" },
+    { id: "ag_eq_am",          nome: "Equatorial Energia AM",        login: "AE_EqAM",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Equatorial Energia AM" },
+    { id: "ag_energisa_pb",    nome: "Energisa PB",                  login: "AE_EnPB",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Energisa PB" },
+    { id: "ag_energisa_se",    nome: "Energisa SE",                  login: "AE_EnSE",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Energisa SE" },
+    { id: "ag_energisa_mt",    nome: "Energisa MT",                  login: "AE_EnMT",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Energisa MT" },
+    { id: "ag_energisa_ms",    nome: "Energisa MS",                  login: "AE_EnMS",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Energisa MS" },
+    { id: "ag_energisa_to",    nome: "Energisa TO",                  login: "AE_EnTO",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Energisa TO" },
+    { id: "ag_energisa_ro",    nome: "Energisa RO",                  login: "AE_EnRO",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Energisa RO" },
+    { id: "ag_energisa_ac",    nome: "Energisa AC",                  login: "AE_EnAC",     senha: "Agente@2026", perfil: "agente", agenteExecutor: "Energisa AC" },
+    { id: "ag_neo_pe",         nome: "Neoenergia PE",                login: "AE_NeoPE",    senha: "Agente@2026", perfil: "agente", agenteExecutor: "Neoenergia PE" },
+    { id: "ag_neo_rn",         nome: "Neoenergia RN",                login: "AE_NeoRN",    senha: "Agente@2026", perfil: "agente", agenteExecutor: "Neoenergia RN" }
+  ];
+
+  function loadUsuarios() {
+    try {
+      const ver = localStorage.getItem(STORAGE_USERS_VERSION_KEY);
+      const raw = localStorage.getItem(STORAGE_USERS_KEY);
+      if (raw && ver === USERS_VERSION) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      }
+    } catch(e) {}
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(DEFAULT_USERS));
+    localStorage.setItem(STORAGE_USERS_VERSION_KEY, USERS_VERSION);
+    return DEFAULT_USERS;
+  }
+
+  const usuarios = loadUsuarios();
+
+  /* =========================================================
+     SELEÇÃO DE PERFIL
+     ========================================================= */
+  let _selectedRole = null;
+
+  function selectProfile(role) {
+    _selectedRole = role;
+    document.querySelectorAll(".profile-btn").forEach(b => b.classList.remove("active-profile"));
+    const btnClass = role === "admin" ? ".admin-btn" : role === "analista_ap" ? ".ap-btn" : ".agent-btn";
+    document.querySelector(btnClass).classList.add("active-profile");
+    setTimeout(() => showLoginScreen(role), 220);
+  }
+
+  function showLoginScreen(role) {
+    document.getElementById("screen-select").classList.remove("active");
+    document.getElementById("screen-login").classList.add("active");
+
+    const isAdmin = role === "admin";
+    const isAP = role === "analista_ap";
+    const icon = isAdmin ? "🛡️" : isAP ? "🔎" : "👷";
+    const label = isAdmin ? "Administrador" : isAP ? "Analista Preliminar" : "Agente Executor";
+    document.getElementById("role-badge-wrap").innerHTML = `
+      <div class="role-badge ${role}">
+        <span style="font-size:16px">${icon}</span>
+        ${label}
+      </div>`;
+
+    const btn = document.getElementById("login-btn");
+    btn.className = "login-btn " + (isAdmin ? "admin-btn-style" : isAP ? "ap-btn-style" : "agent-btn-style");
+    btn.textContent = "Entrar como " + label;
+
+    // Popular demos por perfil
+    const demosDoPerf = usuarios.filter(u => u.perfil === role);
+    const demoList = document.getElementById("demo-list");
+    demoList.innerHTML = "";
+    demosDoPerf.forEach(u => {
+      const extra = u.agenteExecutor ? ` · ${u.agenteExecutor}` : "";
+      const el = document.createElement("div");
+      el.className = "demo-item";
+      el.innerHTML = `<span class="dn">${u.nome}${extra}</span><span class="dl">${u.login}</span>`;
+      el.onclick = () => {
+        document.getElementById("login-user").value = u.login;
+        document.getElementById("login-pass").value = u.senha;
+      };
+      demoList.appendChild(el);
+    });
+
+    setTimeout(() => document.getElementById("login-user").focus(), 50);
+  }
+
+  function goBack() {
+    document.getElementById("screen-login").classList.remove("active");
+    document.getElementById("screen-select").classList.add("active");
+    document.getElementById("err-msg").classList.remove("show");
+    document.getElementById("login-user").value = "";
+    document.getElementById("login-pass").value = "";
+    document.getElementById("login-btn").disabled = false;
+    _selectedRole = null;
+    document.querySelectorAll(".profile-btn").forEach(b => b.classList.remove("active-profile"));
+  }
+
+  function togglePwd() {
+    const i = document.getElementById("login-pass"), b = document.getElementById("eye-btn");
+    i.type = i.type === "password" ? "text" : "password";
+    b.textContent = i.type === "password" ? "👁" : "🙈";
+  }
+
+  function showError(msg) {
+    document.getElementById("err-txt").textContent = msg;
+    document.getElementById("err-msg").classList.add("show");
+    document.getElementById("login-pass").value = "";
+    setTimeout(() => document.getElementById("err-msg").classList.remove("show"), 4500);
+  }
+
+  document.getElementById("login-user").addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("login-pass").focus();
+  });
+  document.getElementById("login-pass").addEventListener("keydown", e => {
+    if (e.key === "Enter") doLogin();
+  });
+
+  function doLogin() {
+    const u = document.getElementById("login-user").value.trim();
+    const p = document.getElementById("login-pass").value;
+    const btn = document.getElementById("login-btn");
+    if (!u || !p) { showError("Preencha o login e a senha."); return; }
+    if (!_selectedRole) { showError("Selecione um perfil de acesso."); return; }
+
+    btn.disabled = true;
+    const spinner = '<span class="spinner"></span>';
+    btn.innerHTML = spinner + "Verificando…";
+
+    setTimeout(() => {
+      const usuario = usuarios.find(x => x.perfil === _selectedRole && x.login === u && x.senha === p);
+      if (!usuario) {
+        btn.disabled = false;
+        btn.textContent = _selectedRole === "admin" ? "Entrar como Administrador" : "Entrar como Agente Executor";
+        showError("Credenciais inválidas para o perfil selecionado.");
+        return;
+      }
+      localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify({
+        id: usuario.id, nome: usuario.nome, perfil: usuario.perfil,
+        agenteExecutor: usuario.agenteExecutor || null, login: usuario.login,
+        loginAt: Date.now()
+      }));
+      const dest = usuario.perfil === "admin" ? "./dashboard_programas_obras.html"
+        : usuario.perfil === "analista_ap" ? "./analise_preliminar.html"
+        : "./meus_pos.html";
+      window.location.href = dest;
+    }, 650);
+  }
+</script>
+</body>
+</html>

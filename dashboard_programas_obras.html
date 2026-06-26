@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script>
+  /* ── JSONBIN CONFIG ── */
+  const JSONBIN_API_KEY = "$2a$10$Wm38/lGALLta4chHp7NwVOb31uBXGpV0T9SSHg0m4nIk8mgZZptRu";
+  const BIN_PROGRAMAS  = "6a3e73bdda38895dfe02a10b";
+  const BIN_PO_DADOS   = "6a3e73a9da38895dfe02a0a1";
+  const JSONBIN_BASE   = "https://api.jsonbin.io/v3/b";
+  const JB_HEADERS     = { "Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY };
+
+  /* ── PROGRAMAS ── */
+  async function loadProgramas() {
+    try {
+      const r = await fetch(`${JSONBIN_BASE}/${BIN_PROGRAMAS}/latest`, { headers: JB_HEADERS });
+      const j = await r.json();
+      return j.record?.dados || [];
+    } catch(e) { console.error('loadProgramas:', e); return []; }
+  }
+  async function saveProgramas(lista) {
+    await fetch(`${JSONBIN_BASE}/${BIN_PROGRAMAS}`, {
+      method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: lista })
+    });
+  }
+  async function addPrograma(programa) {
+    const lista = await loadProgramas();
+    lista.push(programa);
+    await saveProgramas(lista);
+  }
+  async function updateProgramaFS(id, changes) {
+    const lista = await loadProgramas();
+    const idx = lista.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    Object.assign(lista[idx], changes);
+    await saveProgramas(lista);
+  }
+  async function deleteProgramaFS(id) {
+    const lista = await loadProgramas();
+    await saveProgramas(lista.filter(p => p.id !== id));
+  }
+
+  /* ── PO_DADOS ── */
+  async function _loadTodosDados() {
+    try {
+      const r = await fetch(`${JSONBIN_BASE}/${BIN_PO_DADOS}/latest`, { headers: JB_HEADERS });
+      const j = await r.json();
+      return j.record?.dados || {};
+    } catch(e) { return {}; }
+  }
+  async function loadDadosFS(poId) {
+    if (!poId) return {};
+    const todos = await _loadTodosDados();
+    return todos[poId] || {};
+  }
+  async function saveDadosFS(poId, dados) {
+    if (!poId) return;
+    const todos = await _loadTodosDados();
+    todos[poId] = dados;
+    await fetch(`${JSONBIN_BASE}/${BIN_PO_DADOS}`, {
+      method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: todos })
+    });
+  }
+</script>
+<script>
+  /* ── GUARD DE SESSÃO: primeiro script do <head> ── */
+  (function(){
+    try {
+      var raw = localStorage.getItem('plataforma_po_sessao');
+      var s = raw ? JSON.parse(raw) : null;
+      if (!s) { window.location.replace('./login.html'); document.documentElement.style.display='none'; return; }
+      if (s.loginAt && (Date.now() - s.loginAt) > 8*3600*1000) {
+        localStorage.removeItem('plataforma_po_sessao');
+        window.location.replace('./login.html'); document.documentElement.style.display='none'; return;
+      }
+      if(s.perfil==='analista_ap'){window.location.replace('./analise_preliminar.html');document.documentElement.style.display='none';return;} if(s.perfil!=='admin'){window.location.replace('./meus_pos.html');document.documentElement.style.display='none';return;}
+    } catch(e) { window.location.replace('./login.html'); document.documentElement.style.display='none'; }
+  })();
+</script>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Plataforma de Obras — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B2545;--navy2:#163B6E;--navy3:#1E4D8C;
+  --primary:#0B82C6;--primary2:#096fa8;--primary-lt:#EFF6FF;--primary-mid:#DBEAFE;
+  --accent:#A5C715;--accent2:#8aaa0f;--accent-lt:#F7FEE7;
+  --red:#DC2626;--red-lt:#FEF2F2;--red-mid:#FECACA;
+  --ok:#16a34a;--ok-lt:#f0fdf4;
+  --warn:#d97706;--warn-lt:#fffbeb;
+  --blue:#2563EB;--blue-lt:#EFF6FF;
+  --purple:#7C3AED;--purple-lt:#F5F3FF;
+  --surf:#F0F4F8;--surf2:#F7F9FC;
+  --bdr:#D1D9E0;--bdr2:#B0BEC5;
+  --txt:#111827;--txt2:#4B5563;--txt3:#9CA3AF;
+  --r:8px;--rlg:12px;--rxl:16px;
+}
+body{font-family:"IBM Plex Sans",sans-serif;font-size:14px;color:var(--txt);background:var(--surf);min-height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:248px;background:linear-gradient(180deg,var(--navy) 0%,var(--navy2) 100%);color:#fff;display:flex;flex-direction:column;z-index:100;box-shadow:4px 0 16px rgba(0,0,0,.15)}
+.sb-logo{padding:18px 18px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-logos{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sb-logo-wrap{background:#fff;border-radius:8px;padding:5px 10px;display:inline-flex;align-items:center}
+.sb-logo-div{width:1px;height:26px;background:rgba(255,255,255,.2)}
+.sb-title{font-size:11px;color:rgba(255,255,255,.42);font-weight:500;letter-spacing:.3px}
+.sb-nav{flex:1;padding:14px 10px;overflow-y:auto}
+.sb-section{font-size:10px;font-weight:700;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:1px;padding:0 8px;margin:14px 0 5px}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:rgba(255,255,255,.58);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:none;background:none;width:100%;text-align:left;text-decoration:none}
+.sb-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.sb-item.active{background:rgba(11,130,198,.35);color:#fff;border-left:3px solid var(--primary);border-radius:0 8px 8px 0;padding-left:9px}
+.sb-item .ico{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.sb-footer{padding:14px 18px;border-top:1px solid rgba(255,255,255,.08)}
+.sb-user{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sb-avatar{width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.sb-user-info .sb-name{font-size:13px;font-weight:600;color:#fff}
+.sb-user-info .sb-role{font-size:11px;color:rgba(255,255,255,.4)}
+.logout-btn{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:6px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.25);color:#FCA5A5;font-size:12px;cursor:pointer;font-family:"IBM Plex Sans",sans-serif;transition:all .15s;width:100%;justify-content:center}
+.logout-btn:hover{background:rgba(220,38,38,.25)}
+
+/* ── MAIN ── */
+.main{margin-left:248px;min-height:100vh;display:flex;flex-direction:column}
+.topbar{background:#fff;border-bottom:1px solid var(--bdr);padding:14px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.topbar-title{font-size:18px;font-weight:700;color:var(--navy)}
+.topbar-sub{font-size:12px;color:var(--txt3);margin-top:1px}
+.content{padding:28px 32px 60px;flex:1}
+
+/* ── STAT CARDS ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.stat-card{background:#fff;border:1px solid var(--bdr);border-radius:var(--rlg);padding:18px 20px;position:relative;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px}
+.stat-card.c-blue::before{background:var(--blue)}.stat-card.c-primary::before{background:var(--primary)}.stat-card.c-warn::before{background:var(--warn)}.stat-card.c-ok::before{background:var(--ok)}
+.stat-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}
+.stat-card.c-blue .stat-icon{background:var(--blue-lt)}.stat-card.c-primary .stat-icon{background:var(--primary-lt)}.stat-card.c-warn .stat-icon{background:var(--warn-lt)}.stat-card.c-ok .stat-icon{background:var(--ok-lt)}
+.stat-val{font-size:30px;font-weight:700;color:var(--navy);font-family:"IBM Plex Mono",monospace}
+.stat-lbl{font-size:12px;color:var(--txt2);margin-top:3px;font-weight:500}
+.stat-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+
+/* ── BUTTONS ── */
+.btn{padding:9px 16px;border-radius:var(--r);font-family:"IBM Plex Sans",sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;text-decoration:none}
+.btn-primary{background:var(--primary);border-color:var(--primary2);color:#fff;box-shadow:0 2px 8px rgba(11,130,198,.25)}
+.btn-primary:hover{background:var(--primary2);transform:translateY(-1px)}
+.btn-outline{background:#fff;border-color:var(--bdr2);color:var(--txt2)}
+.btn-outline:hover{background:var(--surf2)}
+.btn-sm{padding:6px 11px;font-size:12px}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.search-wrap{position:relative;flex:1;min-width:200px}
+.search-ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:14px;opacity:.4}
+.search-input{width:100%;padding:9px 12px 9px 36px;border:1.5px solid var(--bdr);border-radius:var(--r);font-family:"IBM Plex Sans",sans-serif;font-size:13px;outline:none;transition:border-color .15s}
+.search-input:focus{border-color:var(--primary)}
+.filter-select{padding:9px 12px;border:1.5px solid var(--bdr);border-radius:var(--r);font-family:"IBM Plex Sans",sans-serif;font-size:13px;outline:none;background:#fff;cursor:pointer;color:var(--txt)}
+
+/* ── TABLE ── */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.sec-title{font-size:16px;font-weight:700;color:var(--navy)}
+.sec-sub{font-size:12px;color:var(--txt3);margin-top:1px}
+.table-card{background:#fff;border:1px solid var(--bdr);border-radius:var(--rlg);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.tbl-wrap{overflow-x:auto}
+table.main-tbl{width:100%;border-collapse:collapse}
+table.main-tbl thead tr{background:var(--navy)}
+table.main-tbl th{padding:11px 14px;font-size:11.5px;font-weight:600;color:rgba(255,255,255,.85);text-align:left;white-space:nowrap;letter-spacing:.3px}
+table.main-tbl td{padding:12px 14px;font-size:13px;border-bottom:1px solid var(--bdr);vertical-align:middle}
+table.main-tbl tbody tr:hover td{background:var(--surf2)}
+table.main-tbl tbody tr:last-child td{border-bottom:none}
+.tbl-empty-row td{text-align:center;padding:48px 20px;color:var(--txt3)}
+.tbl-empty-icon{font-size:32px;margin-bottom:10px;opacity:.4}
+.tbl-empty-row h3{font-size:14px;font-weight:600;color:var(--txt);margin-bottom:4px}
+.tbl-empty-row p{font-size:12.5px;max-width:360px;margin:0 auto}
+
+/* ── BADGES / TAGS ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.tag{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;border:1px solid}
+.tag-rdr{color:var(--primary);border-color:rgba(11,130,198,.3);background:var(--primary-lt)}
+.tag-rdrx{color:var(--purple);border-color:rgba(124,58,237,.3);background:var(--purple-lt)}
+.tag-sigfi{color:var(--accent2);border-color:rgba(138,170,15,.35);background:var(--accent-lt)}
+
+.status-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600}
+.status-badge::before{content:"";width:7px;height:7px;border-radius:50%;display:block;flex-shrink:0}
+.status-badge.draft{color:var(--txt3)}.status-badge.draft::before{background:var(--txt3)}
+.status-badge.review{color:var(--primary)}.status-badge.review::before{background:var(--primary)}
+.status-badge.warn{color:var(--warn)}.status-badge.warn::before{background:var(--warn)}
+.status-badge.approved{color:var(--ok)}.status-badge.approved::before{background:var(--ok)}
+
+/* ── PO CELL ── */
+.po-name{font-weight:600;color:var(--txt)}
+.po-meta{font-size:11.5px;color:var(--txt3);margin-top:2px;font-family:"IBM Plex Mono",monospace}
+
+/* ── PROGRESS ── */
+.progress-row{display:flex;align-items:center;gap:8px}
+.progress-bar{flex:1;height:5px;background:var(--bdr);border-radius:3px;overflow:hidden;min-width:60px}
+.progress-bar>div{height:100%;background:var(--accent);border-radius:3px}
+.progress-pct{font-size:11.5px;color:var(--txt3);font-family:"IBM Plex Mono",monospace;flex-shrink:0}
+
+/* ── ROW ACTIONS ── */
+.row-actions{display:flex;gap:5px}
+.icon-btn{padding:5px 9px;border-radius:6px;border:1px solid var(--bdr);background:#fff;cursor:pointer;font-size:13px;color:var(--txt2);transition:all .15s}
+.icon-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-lt)}
+
+/* ── MODAL ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:200;display:none;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:var(--rxl);width:100%;max-width:640px;box-shadow:0 24px 64px rgba(0,0,0,.25);margin:auto}
+.modal-hdr{padding:22px 28px 18px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-size:17px;font-weight:700;color:var(--navy)}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--txt3);padding:0;line-height:1;transition:color .15s}
+.modal-close:hover{color:var(--red)}
+.modal-body{padding:24px 28px}
+.modal-footer{padding:18px 28px 22px;border-top:1px solid var(--bdr);display:flex;justify-content:flex-end;gap:10px}
+
+/* ── FORM ── */
+.fg{display:flex;flex-direction:column;gap:5px;margin-bottom:16px}
+.lbl{font-size:11.5px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px}
+input[type=text],input[type=date],input[type=number],select,textarea{width:100%;padding:9px 12px;border:1.5px solid var(--bdr);border-radius:var(--r);font-family:"IBM Plex Sans",sans-serif;font-size:13px;color:var(--txt);outline:none;transition:border-color .15s,box-shadow .15s;background:#fff}
+input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(11,130,198,.1)}
+textarea{resize:vertical;min-height:72px}
+select{cursor:pointer}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.hint{font-size:11.5px;color:var(--txt3);margin-top:4px}
+
+/* ── STEP INDICATOR ── */
+.step-bar{display:flex;align-items:center;gap:8px;margin-bottom:24px}
+.step-dot{width:8px;height:8px;border-radius:50%;background:var(--bdr2);transition:background .2s}
+.step-dot.active{background:var(--primary)}
+.step-label{font-size:12px;color:var(--txt3);font-weight:500}
+
+/* ── MODEL OPTIONS ── */
+.program-options{display:flex;flex-direction:column;gap:10px}
+.program-option{display:flex;align-items:center;gap:14px;padding:14px 18px;border:2px solid var(--bdr);border-radius:10px;cursor:pointer;transition:all .18s;background:#fff}
+.program-option:hover{border-color:var(--primary);background:var(--primary-lt)}
+.program-option.selected{border-color:var(--primary);background:var(--primary-lt)}
+.program-option .opt-icon{font-size:22px;flex-shrink:0}
+.program-option .opt-name{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:2px}
+.program-option .opt-desc{font-size:12px;color:var(--txt2)}
+.program-option .opt-check{margin-left:auto;font-size:18px;color:var(--primary);opacity:0;transition:opacity .15s}
+.program-option.selected .opt-check{opacity:1}
+
+/* ── SDIV ── */
+.sdiv{display:flex;align-items:center;gap:10px;margin:20px 0 16px}
+.sdiv-lbl{font-size:10.5px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap}
+.sdiv-ln{flex:1;height:1px;background:var(--bdr)}
+
+/* ── STEP PANELS ── */
+.step-panel{display:none}.step-panel.active{display:block}
+
+/* ── STEP BUTTONS ── */
+.modal-footer .btn-back{display:none}
+
+/* ── MODAL AGENTES ── */
+.agents-table{width:100%;border-collapse:collapse;font-size:13px}
+.agents-table th{padding:9px 12px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;text-align:left;border-bottom:2px solid var(--bdr);background:var(--surf2)}
+.agents-table td{padding:10px 12px;border-bottom:1px solid var(--bdr);vertical-align:middle}
+.agents-table tbody tr:hover td{background:var(--surf2)}
+.agents-table tbody tr:last-child td{border-bottom:none}
+.agent-login{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--txt2);background:var(--surf);padding:3px 8px;border-radius:4px}
+.agent-pass-wrap{display:flex;align-items:center;gap:6px}
+.agent-pass{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--txt2);background:var(--surf);padding:3px 8px;border-radius:4px;letter-spacing:2px}
+.inline-edit{display:none;gap:6px;align-items:center;flex-wrap:wrap}
+.inline-edit.visible{display:flex}
+.inline-input{padding:5px 8px;border:1.5px solid var(--bdr);border-radius:6px;font-family:"IBM Plex Sans",sans-serif;font-size:12px;width:120px;outline:none}
+.inline-input:focus{border-color:var(--primary)}
+.agent-row-actions{display:flex;gap:5px}
+.agent-edit-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--bdr);background:#fff;font-size:12px;cursor:pointer;color:var(--txt2);font-family:"IBM Plex Sans",sans-serif;transition:all .15s}
+.agent-edit-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-lt)}
+.agent-edit-btn.save{background:var(--primary);color:#fff;border-color:var(--primary2)}
+.agent-edit-btn.save:hover{background:var(--primary2)}
+.agent-edit-btn.cancel{color:var(--red);border-color:var(--red-mid)}
+.agent-edit-btn.cancel:hover{background:var(--red-lt)}
+.modal-lg{max-width:900px}
+.agents-search{padding:8px 12px;border:1.5px solid var(--bdr);border-radius:var(--r);font-family:"IBM Plex Sans",sans-serif;font-size:13px;width:240px;outline:none}
+.agents-search:focus{border-color:var(--primary)}
+.toast-agent{position:fixed;bottom:28px;right:28px;z-index:999;background:var(--navy);color:#fff;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none}
+.toast-agent.show{transform:translateY(0);opacity:1}
+.toast-agent.ok{background:var(--ok)}
+
+/* ── MODAL AGENTES ── */
+.agents-table{width:100%;border-collapse:collapse;font-size:13px}
+.agents-table th{padding:9px 12px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;text-align:left;border-bottom:2px solid var(--bdr);background:var(--surf2)}
+.agents-table td{padding:10px 12px;border-bottom:1px solid var(--bdr);vertical-align:middle}
+.agents-table tbody tr:hover td{background:var(--surf2)}
+.agents-table tbody tr:last-child td{border-bottom:none}
+.agent-login{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--txt2);background:var(--surf);padding:3px 8px;border-radius:4px}
+.agent-pass-wrap{display:flex;align-items:center;gap:6px}
+.agent-pass{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--txt2);background:var(--surf);padding:3px 8px;border-radius:4px;letter-spacing:2px}
+.inline-edit{display:none;gap:6px;align-items:center;flex-wrap:wrap}
+.inline-edit.visible{display:flex}
+.inline-input{padding:5px 8px;border:1.5px solid var(--bdr);border-radius:6px;font-family:"IBM Plex Sans",sans-serif;font-size:12px;width:120px;outline:none}
+.inline-input:focus{border-color:var(--primary)}
+.agent-row-actions{display:flex;gap:5px}
+.agent-edit-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--bdr);background:#fff;font-size:12px;cursor:pointer;color:var(--txt2);font-family:"IBM Plex Sans",sans-serif;transition:all .15s}
+.agent-edit-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-lt)}
+.agent-edit-btn.save{background:var(--primary);color:#fff;border-color:var(--primary2)}
+.agent-edit-btn.save:hover{background:var(--primary2)}
+.agent-edit-btn.cancel{color:var(--red);border-color:var(--red-mid)}
+.agent-edit-btn.cancel:hover{background:var(--red-lt)}
+.modal-lg{max-width:900px}
+.agents-search{padding:8px 12px;border:1.5px solid var(--bdr);border-radius:var(--r);font-family:"IBM Plex Sans",sans-serif;font-size:13px;width:240px;outline:none}
+.agents-search:focus{border-color:var(--primary)}
+.toast-agent{position:fixed;bottom:28px;right:28px;z-index:999;background:var(--navy);color:#fff;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none}
+.toast-agent.show{transform:translateY(0);opacity:1}
+.toast-agent.ok{background:var(--ok)}
+
+
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logos"><span style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;color:#fff;letter-spacing:.5px;opacity:.9">ENBPar · Luz para Todos</span></div>
+    <div class="sb-title">Sistema de Gestão de Programas de Obras</div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-section">Principal</div>
+    <a class="sb-item active" href="dashboard_programas_obras.html"><span class="ico">📊</span> Dashboard</a>
+    <div class="sb-section">Gestão</div>
+    <button class="sb-item" id="openModalBtn"><span class="ico">➕</span> Novo Programa de Obras</button>
+    <div class="sb-section">Agentes</div>
+    <button class="sb-item" id="openAgentesBtn"><span class="ico">👥</span> Agentes Executores</button>
+    <a class="sb-item" href="meus_pos.html"><span class="ico">👷</span> Área do Agente</a>
+  </nav>
+  <div class="sb-footer">
+    <div class="sb-user">
+      <div class="sb-avatar">A</div>
+      <div class="sb-user-info">
+        <div class="sb-name" id="sbUserName">Administrador</div>
+        <div class="sb-role">Administrador ENBPar</div>
+      </div>
+    </div>
+    <button class="logout-btn" id="logoutBtn">🚪 Sair do sistema</button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Dashboard — Programas de Obras</div>
+      <div class="topbar-sub">Gerencie todos os POs e agentes executores</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div id="sessionPill" style="font-size:12px;color:var(--txt3);padding:6px 14px;border:1px solid var(--bdr);border-radius:999px;background:#fff"></div>
+      <button class="btn btn-primary" id="openModalBtn2">➕ Novo Programa de Obras</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- STATS -->
+    <div class="stats">
+      <div class="stat-card c-blue">
+        <div class="stat-icon">📋</div>
+        <div class="stat-val" id="kpiTotal">0</div>
+        <div class="stat-lbl">POs Cadastrados</div>
+        <div class="stat-sub" id="kpiTotalSub">—</div>
+      </div>
+      <div class="stat-card c-primary">
+        <div class="stat-icon">🔍</div>
+        <div class="stat-val" id="kpiEnviado">0</div>
+        <div class="stat-lbl">Em Análise</div>
+        <div class="stat-sub" id="kpiEnviadoSub">Aguardando parecer técnico</div>
+      </div>
+      <div class="stat-card c-warn">
+        <div class="stat-icon">🔁</div>
+        <div class="stat-val" id="kpiRevisao">0</div>
+        <div class="stat-lbl">Em Revisão (ajustes)</div>
+        <div class="stat-sub" id="kpiRevisaoSub">Nenhum PO com pendências</div>
+      </div>
+      <div class="stat-card c-ok">
+        <div class="stat-icon">✅</div>
+        <div class="stat-val" id="kpiAprovado">0</div>
+        <div class="stat-lbl">POs Aprovados</div>
+        <div class="stat-sub" id="kpiAprovadoSub">—</div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="sec-hdr">
+      <div>
+        <div class="sec-title">Programas de Obras Registrados</div>
+        <div class="sec-sub">Clique em ↗ para abrir o formulário de preenchimento</div>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <select class="filter-select" id="filterModelo">
+        <option value="">Todos os modelos</option>
+        <option value="rdr">RDR — Redes Rurais</option>
+        <option value="rdrx">RDR-X — Metas Excepcionais</option>
+        <option value="sigfi">SIGFI — Sistemas Isolados</option>
+      </select>
+      <select class="filter-select" id="filterStatus">
+        <option value="">Todos os status</option>
+        <option value="draft">Rascunho</option>
+        <option value="enviado">Enviado p/ Análise</option>
+        <option value="revisao">Em Revisão (ajustes)</option>
+        <option value="aprovado">Aprovado</option>
+      </select>
+      <div class="search-wrap">
+        <span class="search-ico">🔍</span>
+        <input type="search" class="search-input" id="filterSearch" placeholder="Buscar por nome, código ou agente executor…">
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="tbl-wrap">
+        <table class="main-tbl">
+          <thead><tr>
+            <th>Programa / Código</th>
+            <th>Modelo</th>
+            <th>Agente Executor</th>
+            <th>Analista Preliminar</th>
+            <th>Investimento (R$ mil)</th>
+            <th>Preenchimento</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr></thead>
+          <tbody id="poTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- dummy .table-wrap e #emptyState para compatibilidade com JS existente -->
+    <div class="table-wrap" style="display:none"></div>
+    <div id="emptyState" style="display:none"><h3></h3><p></p></div>
+  </div>
+</div>
+
+<!-- MODAL: NOVO PROGRAMA DE OBRAS -->
+<div class="overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">Novo Programa de Obras</div>
+      <button class="modal-close" id="closeModalBtn">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="step-bar">
+        <div class="step-dot active" id="dot0"></div>
+        <div class="step-dot" id="dot1"></div>
+        <span class="step-label" id="stepLabel">Passo 1 — Selecione o modelo</span>
+      </div>
+
+      <!-- PASSO 1 -->
+      <div class="step-panel active" id="step1">
+        <div class="sdiv" style="margin-top:0"><div class="sdiv-ln"></div><div class="sdiv-lbl">Modelo de Planilha</div><div class="sdiv-ln"></div></div>
+        <div class="program-options">
+          <div class="program-option" data-model="rdr">
+            <span class="opt-icon">🌾</span>
+            <div>
+              <div class="opt-name">RDR — Redes de Distribuição Rural</div>
+              <div class="opt-desc">Modelo padrão para eletrificação rural convencional (redes)</div>
+            </div>
+            <span class="opt-check">✓</span>
+          </div>
+          <div class="program-option" data-model="rdrx">
+            <span class="opt-icon">⚡</span>
+            <div>
+              <div class="opt-name">RDR-X — Metas Excepcionais</div>
+              <div class="opt-desc">Variante com volume reduzido de UCs — metas excepcionais</div>
+            </div>
+            <span class="opt-check">✓</span>
+          </div>
+          <div class="program-option" data-model="sigfi">
+            <span class="opt-icon">🏝</span>
+            <div>
+              <div class="opt-name">SIGFI — Sistemas Isolados (Amazônia Legal)</div>
+              <div class="opt-desc">Sistemas individuais fotovoltaicos — atendimento isolado</div>
+            </div>
+            <span class="opt-check">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PASSO 2 -->
+      <div class="step-panel" id="step2">
+        <div class="sdiv" style="margin-top:0"><div class="sdiv-ln"></div><div class="sdiv-lbl">Dados do Programa</div><div class="sdiv-ln"></div></div>
+        <div class="grid-2">
+          <div class="fg"><label class="lbl">Nome do Programa</label><input type="text" id="poFieldNome" placeholder="Ex: Programa de Obras — Equatorial GO"></div>
+          <div class="fg"><label class="lbl">Código gerado</label><input type="text" id="poFieldCodigo" readonly style="background:var(--surf);color:var(--txt2)"></div>
+        </div>
+        <div class="fg">
+          <label class="lbl">Agente Executor designado</label>
+          <select id="poFieldAgente"></select>
+          <div class="hint">O agente selecionado terá acesso a este PO em "Meus Programas".</div>
+        </div>
+        <div class="fg">
+          <label class="lbl">Analista Preliminar designado</label>
+          <select id="poFieldAnalistaAP"></select>
+          <div class="hint">O analista selecionado poderá registrar o parecer da Análise Preliminar deste PO.</div>
+        </div>
+        <div class="grid-2">
+          <div class="fg"><label class="lbl">Data de referência</label><input type="date" id="poFieldData"></div>
+          <div class="fg"><label class="lbl">Prazo (meses)</label><input type="number" id="poFieldPrazo" min="1" placeholder="Ex: 24"></div>
+        </div>
+        <div class="fg"><label class="lbl">Investimento estimado (R$ x1000)</label><input type="number" id="poFieldInvestimento" min="0" placeholder="Ex: 7500"></div>
+        <div class="fg"><label class="lbl">Observações</label><textarea id="poFieldObs" placeholder="Informações adicionais…"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="cancelBtn">Cancelar</button>
+      <button class="btn btn-outline btn-back" id="backBtn" style="display:none">← Voltar</button>
+      <button class="btn btn-primary" id="nextBtn" disabled>Continuar →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* =========================================================
+     SESSÃO / USUÁRIOS
+     ========================================================= */
+  const STORAGE_USERS_KEY = 'plataforma_po_usuarios';
+  const STORAGE_SESSION_KEY = 'plataforma_po_sessao';
+
+  const DEFAULT_USERS = [
+    { id: 'u_admin', nome: 'Equipe Técnica ENBPar', login: 'EnbparATO', senha: 'Teste123', perfil: 'admin' },
+      { id: 'u_enbpar_agente', nome: 'ENBPar — Sistemas Isolados', login: 'enbpar@agente.com', senha: 'agente123', perfil: 'agente', agenteExecutor: 'ENBPar' },
+    { id: 'u_analista_ap', nome: 'Analista Preliminar ENBPar', login: 'AnalistaAP', senha: 'AP@2026', perfil: 'analista_ap' }
+  ];
+
+  const USERS_VERSION = '6';
+  const STORAGE_USERS_VERSION_KEY = 'plataforma_po_usuarios_versao';
+
+  function loadUsuarios(){
+    try {
+      const storedVersion = localStorage.getItem(STORAGE_USERS_VERSION_KEY);
+      const raw = localStorage.getItem(STORAGE_USERS_KEY);
+      if(raw && storedVersion === USERS_VERSION){
+        const parsed = JSON.parse(raw);
+        if(Array.isArray(parsed) && parsed.length) return parsed;
+      }
+    } catch(e){}
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(DEFAULT_USERS));
+    localStorage.setItem(STORAGE_USERS_VERSION_KEY, USERS_VERSION);
+    return DEFAULT_USERS;
+  }
+
+  function getSessao(){
+    try {
+      const raw = localStorage.getItem(STORAGE_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch(e){ return null; }
+  }
+
+  const sessao = getSessao();
+  if(!sessao){
+    window.location.href = './login.html';
+  } else if(sessao.perfil !== 'admin'){
+    window.location.href = './meus_pos.html';
+  }
+
+  const usuarios = loadUsuarios();
+  const agentesExecutores = usuarios.filter(u => u.perfil === 'agente');
+
+  if(sessao){
+    document.getElementById('sessionPill').textContent = `${sessao.nome} · Administrador`;
+  document.getElementById('sbUserName').textContent = sessao.nome;
+  }
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    localStorage.removeItem(STORAGE_SESSION_KEY);
+    window.location.href = './login.html';
+  });
+
+  /* =========================================================
+     STORAGE — PROGRAMAS
+     ========================================================= */
+  const MODEL_LABELS = {
+    rdr: { tag: 'tag-rdr', short: 'RDR', full: 'RDR — Redes Rurais' },
+    rdrx: { tag: 'tag-rdrx', short: 'RDR-X', full: 'RDR-X — Metas Excepcionais' },
+    sigfi: { tag: 'tag-sigfi', short: 'SIGFI', full: 'SIGFI — Sistemas Isolados' }
+  };
+  const STATUS_LABELS = {
+    draft:       { class: 'draft',       label: 'Rascunho' },
+    ap_enviado:  { class: 'review',      label: 'An. Preliminar: Aguardando' },
+    ap_revisao:  { class: 'warn',        label: 'An. Preliminar: Em Revisão' },
+    ap_aprovado: { class: 'ap-approved', label: 'An. Preliminar: Aprovada' },
+    at_enviado:  { class: 'review',      label: 'An. Técnica: Aguardando' },
+    at_revisao:  { class: 'warn',        label: 'An. Técnica: Em Revisão' },
+    aprovado:    { class: 'approved',    label: 'Aprovado' }
+  };
+
+  async function nextCodigo(modelo){
+    const programas = await loadProgramas();
+    const year = new Date().getFullYear();
+    const seq = programas.length + 1;
+    return `PO-${year}-${String(seq).padStart(3, '0')}`;
+  }
+
+  function formatDate(iso){
+    if(!iso) return '—';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  /* =========================================================
+     RENDER — Tabela, KPIs, Filtros
+     ========================================================= */
+  const poTableBody = document.getElementById('poTableBody');
+  const tableWrap = document.querySelector('.table-wrap');
+  const emptyState = document.getElementById('emptyState');
+  const filterModelo = document.getElementById('filterModelo');
+  const filterStatus = document.getElementById('filterStatus');
+  const filterSearch = document.getElementById('filterSearch');
+
+  async function renderTable(){
+    const programas = await loadProgramas();
+    const fModelo = filterModelo.value;
+    const fStatus = filterStatus.value;
+    const fSearch = filterSearch.value.trim().toLowerCase();
+
+    const filtrados = programas.filter(p => {
+      if(fModelo && p.modelo !== fModelo) return false;
+      if(fStatus && p.status !== fStatus) return false;
+      if(fSearch){
+        const haystack = `${p.nome} ${p.codigo} ${p.agente}`.toLowerCase();
+        if(!haystack.includes(fSearch)) return false;
+      }
+      return true;
+    });
+
+    poTableBody.innerHTML = '';
+
+    if(programas.length === 0){
+      tableWrap.classList.add('empty');
+      emptyState.classList.add('visible');
+      emptyState.querySelector('h3').textContent = 'Nenhum Programa de Obras criado';
+      emptyState.querySelector('p').textContent = 'Clique em "Novo Programa de Obras" para criar o primeiro PO a partir de um dos modelos disponíveis.';
+    } else if(filtrados.length === 0){
+      tableWrap.classList.add('empty');
+      emptyState.classList.add('visible');
+      emptyState.querySelector('h3').textContent = 'Nenhum PO corresponde aos filtros';
+      emptyState.querySelector('p').textContent = 'Ajuste os filtros de modelo, status ou busca para visualizar os programas cadastrados.';
+    } else {
+      tableWrap.classList.remove('empty');
+      emptyState.classList.remove('visible');
+      filtrados.forEach(p => poTableBody.appendChild(renderRow(p)));
+    }
+
+    updateKPIs(programas);
+  }
+
+  function renderRow(p){
+    const tr = document.createElement('tr');
+    const modelInfo = MODEL_LABELS[p.modelo];
+    const statusInfo = STATUS_LABELS[p.status] || STATUS_LABELS.draft;
+    const progresso = p.progresso || 0;
+    const investimento = p.investimento ? Number(p.investimento).toLocaleString('pt-BR') : '—';
+
+    tr.innerHTML = `
+      <td>
+        <div class="po-name">${p.codigo} · ${p.nome}</div>
+        <div class="po-meta">Criado em ${formatDate(p.criadoEm)}</div>
+      </td>
+      <td><span class="tag ${modelInfo.tag}">${modelInfo.short}</span></td>
+      <td>${p.agente}</td>
+      <td>
+        ${p.analistaAp
+          ? `<span style="font-size:12px;color:var(--ap2);font-weight:600">🔎 ${p.analistaAp}</span>`
+          : `<span style="font-size:11px;color:var(--txt3)">—</span>`}
+      </td>
+      <td>${investimento}</td>
+      <td>
+        <div class="progress-row">
+          <div class="progress-bar"><div style="width:${progresso}%"></div></div>
+          <span class="progress-pct">${progresso}%</span>
+        </div>
+      </td>
+      <td><span class="status-badge ${statusInfo.class}">${statusInfo.label}</span></td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-btn" title="Abrir" data-action="open" data-id="${p.id}">↗</button>
+          ${p.status === 'aprovado' ? `<span style="font-size:11px;color:var(--ok);font-weight:600">✓ Aprovado</span>` : ''}
+          <button class="icon-btn" title="Excluir" data-action="delete" data-id="${p.id}">🗑</button>
+        </div>
+      </td>
+    `;
+    return tr;
+  }
+
+  function updateKPIs(programas){
+    // POs Cadastrados
+    document.getElementById('kpiTotal').textContent = programas.length;
+    document.getElementById('kpiTotalSub').textContent = programas.length === 0
+      ? 'Nenhum programa criado ainda'
+      : `${programas.length} programa(s) cadastrado(s)`;
+
+    // Em Análise (Preliminar ou Técnica aguardando parecer)
+    const emAnalise = programas.filter(p => p.status === 'ap_enviado' || p.status === 'at_enviado').length;
+    document.getElementById('kpiEnviado').textContent = emAnalise;
+    document.getElementById('kpiEnviadoSub').textContent = emAnalise === 0
+      ? 'Nenhum PO aguardando análise'
+      : 'Aguardando parecer do analista';
+
+    // Em Revisão (ajustes pendentes do agente)
+    const emRevisao = programas.filter(p => p.status === 'ap_revisao' || p.status === 'at_revisao').length;
+    document.getElementById('kpiRevisao').textContent = emRevisao;
+    document.getElementById('kpiRevisaoSub').textContent = emRevisao === 0
+      ? 'Nenhum PO com pendências'
+      : 'Aguardando ajustes do agente';
+
+    // POs Aprovados (aprovação definitiva)
+    const aprovados = programas.filter(p => p.status === 'aprovado').length;
+    document.getElementById('kpiAprovado').textContent = aprovados;
+    document.getElementById('kpiAprovadoSub').textContent = aprovados === 0
+      ? 'Nenhum PO aprovado ainda'
+      : `${aprovados} programa(s) aprovado(s)`;
+  }
+
+  poTableBody.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    if(btn.dataset.action === 'open'){
+      const programas = await loadProgramas();
+      const p = programas.find(x => x.id === id);
+      if(p) window.location.href = `./po_preenchimento.html?modelo=${p.modelo}&id=${p.id}`;
+    } else if(btn.dataset.action === 'delete'){
+      if(confirm('Excluir este Programa de Obras? Esta ação não pode ser desfeita.')){
+        await deleteProgramaFS(id);
+        renderTable();
+      }
+    }
+  });
+
+  filterModelo.addEventListener('change', renderTable);
+  filterStatus.addEventListener('change', renderTable);
+  filterSearch.addEventListener('input', renderTable);
+
+  /* =========================================================
+     MODAL — Novo Programa de Obras
+     ========================================================= */
+  const overlay = document.getElementById('modalOverlay');
+  const openBtn = document.getElementById('openModalBtn');
+  const closeBtn = document.getElementById('closeModalBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const backBtn = document.getElementById('backBtn');
+  const step1 = document.getElementById('step1');
+  const step2 = document.getElementById('step2');
+  const stepDots = document.querySelectorAll('.step-dot');
+  const options = document.querySelectorAll('.program-option');
+
+  let selectedModel = null;
+  let currentStep = 1;
+
+  function openModal(){
+    overlay.classList.add('open');
+  }
+  function closeModal(){
+    overlay.classList.remove('open');
+    resetModal();
+  }
+  function resetModal(){
+    currentStep = 1;
+    selectedModel = null;
+    options.forEach(o => o.classList.remove('selected'));
+    step1.classList.add('active');
+    step2.classList.remove('active');
+    stepDots[0].classList.add('active');
+    stepDots[1].classList.remove('active');
+    document.getElementById('stepLabel').textContent = 'Passo 1 — Selecione o modelo';
+    backBtn.style.display = 'none';
+    nextBtn.textContent = 'Continuar';
+    nextBtn.disabled = true;
+    document.getElementById('poFieldNome').value = '';
+    document.getElementById('poFieldCodigo').value = '';
+    document.getElementById('poFieldAgente').selectedIndex = 0;
+    document.getElementById('poFieldData').value = '';
+    document.getElementById('poFieldPrazo').value = '';
+    document.getElementById('poFieldInvestimento').value = '';
+    document.getElementById('poFieldObs').value = '';
+  }
+
+  openBtn.addEventListener('click', openModal);
+  document.getElementById('openModalBtn2').addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+  cancelBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => { if(e.target === overlay) closeModal(); });
+
+  options.forEach(opt => {
+    opt.addEventListener('click', () => {
+      options.forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      selectedModel = opt.dataset.model;
+      nextBtn.disabled = false;
+    });
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if(currentStep === 1 && selectedModel){
+      currentStep = 2;
+      step1.classList.remove('active');
+      step2.classList.add('active');
+      stepDots[0].classList.remove('active');
+      stepDots[1].classList.add('active');
+      backBtn.style.display = 'inline-flex';
+      nextBtn.textContent = 'Criar Programa de Obras';
+      document.getElementById('poFieldCodigo').value = nextCodigo(selectedModel);
+    } else if(currentStep === 2){
+      criarPrograma();
+    }
+  });
+
+  backBtn.addEventListener('click', () => {
+    if(currentStep === 2){
+      currentStep = 1;
+      step2.classList.remove('active');
+      step1.classList.add('active');
+      stepDots[1].classList.remove('active');
+      stepDots[0].classList.add('active');
+      backBtn.style.display = 'none';
+      nextBtn.textContent = 'Continuar';
+    }
+  });
+
+  function criarPrograma(){
+    const nome = document.getElementById('poFieldNome').value.trim() || 'Novo Programa de Obras';
+    const codigo = document.getElementById('poFieldCodigo').value;
+    const responsavelId = document.getElementById('poFieldAgente').value;
+    const responsavel = usuarios.find(u => u.id === responsavelId);
+    const analistaApId = document.getElementById('poFieldAnalistaAP').value || null;
+    const analistaAp = usuarios.find(u => u.id === analistaApId);
+    const data = document.getElementById('poFieldData').value;
+    const prazo = document.getElementById('poFieldPrazo').value;
+    const investimento = document.getElementById('poFieldInvestimento').value;
+    const obs = document.getElementById('poFieldObs').value.trim();
+
+    const id = 'po_' + Date.now();
+    const programa = {
+      id,
+      codigo,
+      nome,
+      modelo: selectedModel,
+      responsavelId: responsavelId || null,
+      agente: responsavel ? responsavel.agenteExecutor : '—',
+      analistaApId: analistaApId,
+      analistaAp: analistaAp ? analistaAp.nome : null,
+      dataReferencia: data,
+      prazoMeses: prazo,
+      investimento: investimento,
+      observacoes: obs,
+      status: 'draft',
+      progresso: 0,
+      criadoEm: new Date().toISOString().slice(0,10)
+    };
+
+    await addPrograma(programa);
+    window.location.href = `./po_preenchimento.html?modelo=${selectedModel}&id=${id}`;
+  }
+
+  function populateAgenteSelect(){
+    const select = document.getElementById('poFieldAgente');
+    select.innerHTML = '';
+    if(agentesExecutores.length === 0){
+      select.innerHTML = '<option value="">Nenhum agente cadastrado</option>';
+      return;
+    }
+    agentesExecutores.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = `${u.agenteExecutor} — ${u.nome} (${u.login})`;
+      select.appendChild(opt);
+    });
+  }
+
+  function populateAnalistaAPSelect(){
+    const select = document.getElementById('poFieldAnalistaAP');
+    if(!select) return;
+    select.innerHTML = '<option value="">— Sem analista designado —</option>';
+    const analistas = loadUsuarios().filter(u => u.perfil === 'analista_ap');
+    analistas.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = `${u.nome} (${u.login})`;
+      select.appendChild(opt);
+    });
+  }
+
+  populateAgenteSelect();
+  populateAnalistaAPSelect();
+
+  /* =========================================================
+     INIT
+     ========================================================= */
+  renderTable(); // async — returns promise
+</script>
+
+<!-- MODAL: AGENTES EXECUTORES -->
+<div class="overlay" id="overlayAgentes">
+  <div class="modal modal-lg">
+    <div class="modal-hdr">
+      <div class="modal-title">👥 Agentes Executores — Credenciais de Acesso</div>
+      <button class="modal-close" onclick="document.getElementById('overlayAgentes').classList.remove('open')">×</button>
+    </div>
+    <div class="modal-body" style="padding-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap">
+        <p style="font-size:13px;color:var(--txt2)">Gerencie os logins e senhas de acesso de cada Agente Executor ao sistema.</p>
+        <input type="search" class="agents-search" id="agentSearch" placeholder="🔍  Buscar agente…" oninput="renderAgentesTable()">
+      </div>
+      <div style="overflow-x:auto;max-height:480px;overflow-y:auto;border:1px solid var(--bdr);border-radius:var(--r)">
+        <table class="agents-table">
+          <thead><tr>
+            <th>#</th>
+            <th>Agente Executor</th>
+            <th>Login</th>
+            <th>Senha</th>
+            <th>Ações</th>
+          </tr></thead>
+          <tbody id="agentesTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <span style="font-size:12px;color:var(--txt3)" id="agentCount"></span>
+      <button class="btn btn-outline" onclick="document.getElementById('overlayAgentes').classList.remove('open')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-agent" id="toastAgent"></div>
+
+<script>
+/* =========================================================
+   AGENTES EXECUTORES — Lista padrão
+   ========================================================= */
+const AGENTES_PADRAO = [
+  { id: 'ag_neoenergia_bsb', nome: 'Neoenergia Brasília', login: 'AE_NeoBSB', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Neoenergia Brasília' },
+  { id: 'ag_equatorial_go', nome: 'Equatorial Goiás', login: 'AE_EqGO', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Equatorial Goiás' },
+  { id: 'ag_cemig', nome: 'Cemig', login: 'AE_Cemig', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Cemig' },
+  { id: 'ag_light', nome: 'Light', login: 'AE_Light', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Light' },
+  { id: 'ag_enel_rio', nome: 'Enel Distribuição Rio', login: 'AE_EnelRJ', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Enel Distribuição Rio' },
+  { id: 'ag_enel_sp', nome: 'Enel Distribuição São Paulo', login: 'AE_EnelSP', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Enel Distribuição São Paulo' },
+  { id: 'ag_cpfl_paulista', nome: 'CPFL Paulista', login: 'AE_CPFLPau', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'CPFL Paulista' },
+  { id: 'ag_cpfl_pirat', nome: 'CPFL Piratininga', login: 'AE_CPFLPir', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'CPFL Piratininga' },
+  { id: 'ag_neo_elektro', nome: 'Neoenergia Elektro', login: 'AE_NeoElk', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Neoenergia Elektro' },
+  { id: 'ag_edp_sp', nome: 'EDP São Paulo', login: 'AE_EDPSP', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'EDP São Paulo' },
+  { id: 'ag_neo_coelba', nome: 'Neoenergia Coelba', login: 'AE_NeoCoelba', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Neoenergia Coelba' },
+  { id: 'ag_copel', nome: 'Copel', login: 'AE_Copel', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Copel' },
+  { id: 'ag_ceee', nome: 'CEEE-D', login: 'AE_CEEED', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'CEEE-D' },
+  { id: 'ag_rge_sul', nome: 'RGE Sul', login: 'AE_RGESul', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'RGE Sul' },
+  { id: 'ag_eq_ma', nome: 'Equatorial Energia MA', login: 'AE_EqMA', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Equatorial Energia MA' },
+  { id: 'ag_eq_pa', nome: 'Equatorial Energia PA', login: 'AE_EqPA', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Equatorial Energia PA' },
+  { id: 'ag_eq_al', nome: 'Equatorial Energia AL', login: 'AE_EqAL', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Equatorial Energia AL' },
+  { id: 'ag_eq_pi', nome: 'Equatorial Energia PI', login: 'AE_EqPI', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Equatorial Energia PI' },
+  { id: 'ag_eq_ap', nome: 'Equatorial Energia AP', login: 'AE_EqAP', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Equatorial Energia AP' },
+  { id: 'ag_eq_am', nome: 'Equatorial Energia AM', login: 'AE_EqAM', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Equatorial Energia AM' },
+  { id: 'ag_energisa_pb', nome: 'Energisa PB', login: 'AE_EnPB', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Energisa PB' },
+  { id: 'ag_energisa_se', nome: 'Energisa SE', login: 'AE_EnSE', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Energisa SE' },
+  { id: 'ag_energisa_mt', nome: 'Energisa MT', login: 'AE_EnMT', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Energisa MT' },
+  { id: 'ag_energisa_ms', nome: 'Energisa MS', login: 'AE_EnMS', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Energisa MS' },
+  { id: 'ag_energisa_to', nome: 'Energisa TO', login: 'AE_EnTO', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Energisa TO' },
+  { id: 'ag_energisa_ro', nome: 'Energisa RO', login: 'AE_EnRO', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Energisa RO' },
+  { id: 'ag_energisa_ac', nome: 'Energisa AC', login: 'AE_EnAC', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Energisa AC' },
+  { id: 'ag_neo_pe', nome: 'Neoenergia PE', login: 'AE_NeoPE', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Neoenergia PE' },
+  { id: 'ag_neo_rn', nome: 'Neoenergia RN', login: 'AE_NeoRN', senha: 'Agente@2026', perfil: 'agente', agenteExecutor: 'Neoenergia RN' }
+];
+
+/* Sincronizar lista padrão de agentes no localStorage sem sobrescrever edições */
+function syncAgentes() {
+  const todos = loadUsuarios();
+  let mudou = false;
+  AGENTES_PADRAO.forEach(ag => {
+    if (!todos.find(u => u.id === ag.id)) {
+      todos.push(ag);
+      mudou = true;
+    }
+  });
+  if (mudou) {
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(todos));
+    localStorage.setItem(STORAGE_USERS_VERSION_KEY, USERS_VERSION);
+  }
+}
+syncAgentes();
+
+/* =========================================================
+   RENDER tabela de agentes
+   ========================================================= */
+function getAgentes() {
+  return loadUsuarios().filter(u => u.perfil === 'agente');
+}
+
+function renderAgentesTable() {
+  const q = (document.getElementById('agentSearch')?.value || '').toLowerCase();
+  const agentes = getAgentes().filter(a =>
+    !q || a.agenteExecutor.toLowerCase().includes(q) || a.login.toLowerCase().includes(q)
+  );
+  const tbody = document.getElementById('agentesTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  agentes.forEach((ag, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = ag.id;
+    tr.innerHTML = `
+      <td style="color:var(--txt3);font-size:12px">${String(i+1).padStart(2,'0')}</td>
+      <td style="font-weight:600">${ag.agenteExecutor}</td>
+      <td>
+        <span class="agent-login view-login">${ag.login}</span>
+        <div class="inline-edit edit-fields">
+          <input class="inline-input" type="text" value="${ag.login}" placeholder="Login" data-field="login">
+          <input class="inline-input" type="text" value="${ag.senha}" placeholder="Senha" data-field="senha">
+        </div>
+      </td>
+      <td>
+        <div class="agent-pass-wrap view-pass">
+          <span class="agent-pass">••••••••</span>
+          <button class="agent-edit-btn" onclick="togglePassView(this, '${ag.senha}')" style="padding:3px 8px;font-size:11px">👁</button>
+        </div>
+      </td>
+      <td>
+        <div class="agent-row-actions">
+          <button class="agent-edit-btn edit-btn" onclick="startEdit(this)">✏️ Editar</button>
+          <button class="agent-edit-btn save save-btn" style="display:none" onclick="saveEdit(this)">💾 Salvar</button>
+          <button class="agent-edit-btn cancel cancel-btn" style="display:none" onclick="cancelEdit(this)">✕</button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  const count = document.getElementById('agentCount');
+  if (count) count.textContent = `${agentes.length} agente(s) cadastrado(s)`;
+}
+
+function togglePassView(btn, senha) {
+  const passEl = btn.previousElementSibling;
+  if (passEl.textContent === '••••••••') {
+    passEl.textContent = senha;
+    btn.textContent = '🙈';
+  } else {
+    passEl.textContent = '••••••••';
+    btn.textContent = '👁';
+  }
+}
+
+function startEdit(btn) {
+  const tr = btn.closest('tr');
+  tr.querySelectorAll('.view-login,.view-pass').forEach(el => el.style.display = 'none');
+  tr.querySelector('.edit-fields').classList.add('visible');
+  tr.querySelector('.edit-btn').style.display = 'none';
+  tr.querySelector('.save-btn').style.display = 'inline-flex';
+  tr.querySelector('.cancel-btn').style.display = 'inline-flex';
+}
+
+function cancelEdit(btn) {
+  const tr = btn.closest('tr');
+  tr.querySelectorAll('.view-login,.view-pass').forEach(el => el.style.removeProperty('display'));
+  tr.querySelector('.edit-fields').classList.remove('visible');
+  tr.querySelector('.edit-btn').style.removeProperty('display');
+  tr.querySelector('.save-btn').style.display = 'none';
+  tr.querySelector('.cancel-btn').style.display = 'none';
+}
+
+function saveEdit(btn) {
+  const tr = btn.closest('tr');
+  const id = tr.dataset.id;
+  const inputs = tr.querySelectorAll('.inline-input');
+  const novoLogin = inputs[0].value.trim();
+  const novaSenha = inputs[1].value.trim();
+  if (!novoLogin || !novaSenha) {
+    showToastAgent('⚠️ Login e senha não podem estar vazios.', false);
+    return;
+  }
+  const todos = loadUsuarios();
+  const idx = todos.findIndex(u => u.id === id);
+  if (idx !== -1) {
+    todos[idx].login = novoLogin;
+    todos[idx].senha = novaSenha;
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(todos));
+    localStorage.setItem(STORAGE_USERS_VERSION_KEY, USERS_VERSION);
+  }
+  showToastAgent('✓ Credencial atualizada com sucesso!', true);
+  renderAgentesTable();
+  populateAgenteSelect();
+  populateAnalistaAPSelect();
+}
+
+function showToastAgent(msg, ok) {
+  const t = document.getElementById('toastAgent');
+  t.textContent = msg;
+  t.className = 'toast-agent show' + (ok ? ' ok' : '');
+  setTimeout(() => t.className = 'toast-agent', 2800);
+}
+
+/* Abrir modal de agentes */
+document.getElementById('openAgentesBtn').addEventListener('click', () => {
+  document.getElementById('overlayAgentes').classList.add('open');
+  renderAgentesTable();
+});
+document.getElementById('overlayAgentes').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('overlayAgentes'))
+    document.getElementById('overlayAgentes').classList.remove('open');
+});
+</script>
+
+
+</body>
+</html>
