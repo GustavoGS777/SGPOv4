@@ -999,7 +999,9 @@ async function updatePrograma(changes){
 
 /* loadDadosFS / saveDadosFS definidos no bloco JSONBin acima */
 
-// programa e modeloId inicializados em initPage() abaixo
+/* ── variáveis globais definidas antes do uso síncrono ── */
+let programa = null;
+const modeloId = params.get('modelo') || 'rdr';
 
 function getSecoes(modeloId){
   const modelo = SCHEMA[modeloId];
@@ -1506,7 +1508,7 @@ async function initPage(){
   await atualizarStatusLabel();
   await exibirBannerParecer();
 }
-initPage();
+window._initPagePromise = initPage();
 
 mainContent.addEventListener('input', () => {
   updateProgress();
@@ -1625,7 +1627,7 @@ enviarBtn.addEventListener('click', async () => {
 
 <script>
 /* ── INIT EXTRA: wf-bar steps, admin bar, save bar routing ── */
-(function(){
+(window._initPagePromise || Promise.resolve()).then(async function(){
   const sessao = getSessao();
   const isAgente = sessao && sessao.perfil === 'agente';
 
@@ -1781,7 +1783,7 @@ enviarBtn.addEventListener('click', async () => {
   if(typeof salvarTudo !== 'undefined'){
     // Already defined; override status display
   }
-})();
+});
 </script>
 <!-- CSS EXTRA: MODAL PARECER V2 -->
 <style>
