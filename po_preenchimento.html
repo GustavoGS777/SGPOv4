@@ -1020,33 +1020,7 @@ const nomeModelo = (modeloAtual.herdaDe ? SCHEMA[modeloAtual.herdaDe] : modeloAt
 document.getElementById('poModelTag').textContent = modeloAtual.codigo + (modeloAtual.herdaDe ? ' — Metas Excepcionais' : (modeloAtual.codigo === 'RDR' ? ' — Redes Rurais' : ' — Sistemas Isolados'));
 document.getElementById('poModelTag').className = 'tag ' + modeloAtual.tagClass;
 
-if(programa){
-  document.getElementById('poName').textContent = `${programa.codigo} · ${programa.nome}`;
-  document.getElementById('poAgente').textContent = programa.agente || '—';
-  document.getElementById('poData').textContent = programa.dataReferencia
-    ? programa.dataReferencia.split('-').reverse().join('/')
-    : '—';
-  // Analista AP designado
-  const analistaInfo = document.getElementById('analistaApInfo');
-  const analistaSep  = document.getElementById('analistaApSep');
-  if(programa.analistaAp){
-    const nomeEl = document.getElementById('analistaApNome');
-    if(nomeEl) nomeEl.textContent = programa.analistaAp;
-    if(analistaInfo) analistaInfo.style.display = 'inline';
-    if(analistaSep)  analistaSep.style.display  = 'inline';
-  } else {
-    if(analistaInfo) analistaInfo.style.display = 'none';
-    if(analistaSep)  analistaSep.style.display  = 'none';
-  }
-  document.getElementById('overallPct').textContent = (programa.progresso || 0) + '%';
-  document.getElementById('overallBar').style.width = (programa.progresso || 0) + '%';
-} else {
-  document.getElementById('poName').textContent = 'Programa de Obras não encontrado';
-  const warning = document.createElement('div');
-  warning.style.cssText = 'background:rgba(230,168,23,0.08); border:1px solid rgba(230,168,23,0.35); color:#A6790F; padding:12px 32px; font-size:13px;';
-  warning.textContent = 'Este PO não foi encontrado no armazenamento local. As alterações feitas aqui não serão salvas. Volte ao Dashboard e crie um novo Programa de Obras.';
-  document.querySelector('.hdr-info').after(warning);
-}
+/* cabeçalho do PO preenchido em initPage() após carregar do JSONBin */
 
 const STATUS_LABELS_PO = {
   draft:       'Rascunho',
@@ -1499,10 +1473,38 @@ async function initPage(){
     window.location.href = './meus_pos.html'; return;
   }
 
-  // 2. Carregar dados salvos do PO
+  // 2. Preencher cabeçalho com dados do PO
+  if(programa){
+    document.getElementById('poName').textContent = `${programa.codigo} · ${programa.nome}`;
+    document.getElementById('poAgente').textContent = programa.agente || '—';
+    document.getElementById('poData').textContent = programa.dataReferencia
+      ? programa.dataReferencia.split('-').reverse().join('/')
+      : '—';
+    const analistaInfo = document.getElementById('analistaApInfo');
+    const analistaSep  = document.getElementById('analistaApSep');
+    if(programa.analistaAp){
+      const nomeEl = document.getElementById('analistaApNome');
+      if(nomeEl) nomeEl.textContent = programa.analistaAp;
+      if(analistaInfo) analistaInfo.style.display = 'inline';
+      if(analistaSep)  analistaSep.style.display  = 'inline';
+    } else {
+      if(analistaInfo) analistaInfo.style.display = 'none';
+      if(analistaSep)  analistaSep.style.display  = 'none';
+    }
+    document.getElementById('overallPct').textContent = (programa.progresso || 0) + '%';
+    document.getElementById('overallBar').style.width = (programa.progresso || 0) + '%';
+  } else {
+    document.getElementById('poName').textContent = 'Programa de Obras não encontrado';
+    const warning = document.createElement('div');
+    warning.style.cssText = 'background:rgba(230,168,23,0.08);border:1px solid rgba(230,168,23,0.35);color:#A6790F;padding:12px 32px;font-size:13px;';
+    warning.textContent = 'PO não encontrado no JSONBin. Volte ao Dashboard e crie um novo Programa de Obras.';
+    document.querySelector('.hdr-info').after(warning);
+  }
+
+  // 3. Carregar dados salvos do PO
   dadosSalvos = await loadDadosFS(poId);
 
-  // 3. Renderizar
+  // 4. Renderizar
   restaurarCampos();
   updateProgress();
   await atualizarStatusLabel();

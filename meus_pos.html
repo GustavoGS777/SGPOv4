@@ -275,8 +275,9 @@ body{font-family:"IBM Plex Sans",sans-serif;font-size:14px;color:var(--txt);back
   const poGrid = document.getElementById('poGrid');
   const emptyState = document.getElementById('emptyState');
 
-  function render(){
-    const programas = loadProgramas().filter(p => p.responsavelId === sessao.id);
+  async function render(){
+    poGrid.innerHTML = '<div style="color:var(--txt3);padding:32px;grid-column:1/-1;text-align:center">⏳ Carregando...</div>';
+    const programas = await loadMeusPOs();
 
     poGrid.innerHTML = '';
     if(programas.length === 0){
