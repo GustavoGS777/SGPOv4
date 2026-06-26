@@ -61,6 +61,36 @@
       method: 'PUT', headers: JB_HEADERS, body: JSON.stringify({ dados: todos })
     });
   }
+
+  /* ── USUÁRIOS / SESSÃO (globais) ── */
+  const STORAGE_USERS_KEY = 'plataforma_po_usuarios';
+  const STORAGE_SESSION_KEY = 'plataforma_po_sessao';
+  const USERS_VERSION = '6';
+  const STORAGE_USERS_VERSION_KEY = 'plataforma_po_usuarios_versao';
+  const DEFAULT_USERS = [
+    { id: 'u_admin', nome: 'Equipe Técnica ENBPar', login: 'EnbparATO', senha: 'Teste123', perfil: 'admin' },
+    { id: 'u_enbpar_agente', nome: 'ENBPar — Sistemas Isolados', login: 'enbpar@agente.com', senha: 'agente123', perfil: 'agente', agenteExecutor: 'ENBPar' },
+    { id: 'u_analista_ap', nome: 'Analista Preliminar ENBPar', login: 'AnalistaAP', senha: 'AP@2026', perfil: 'analista_ap' }
+  ];
+  function loadUsuarios(){
+    try {
+      const storedVersion = localStorage.getItem(STORAGE_USERS_VERSION_KEY);
+      const raw = localStorage.getItem(STORAGE_USERS_KEY);
+      if(raw && storedVersion === USERS_VERSION){
+        const parsed = JSON.parse(raw);
+        if(Array.isArray(parsed) && parsed.length) return parsed;
+      }
+    } catch(e){}
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(DEFAULT_USERS));
+    localStorage.setItem(STORAGE_USERS_VERSION_KEY, USERS_VERSION);
+    return DEFAULT_USERS;
+  }
+  function getSessao(){
+    try {
+      const raw = localStorage.getItem(STORAGE_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch(e){ return null; }
+  }
 </script>
 <script>
   /* ── GUARD DE SESSÃO: primeiro script do <head> ── */
@@ -507,41 +537,7 @@ select{cursor:pointer}
 </div>
 
 <script>
-  /* =========================================================
-     SESSÃO / USUÁRIOS
-     ========================================================= */
-  const STORAGE_USERS_KEY = 'plataforma_po_usuarios';
-  const STORAGE_SESSION_KEY = 'plataforma_po_sessao';
-
-  const DEFAULT_USERS = [
-    { id: 'u_admin', nome: 'Equipe Técnica ENBPar', login: 'EnbparATO', senha: 'Teste123', perfil: 'admin' },
-      { id: 'u_enbpar_agente', nome: 'ENBPar — Sistemas Isolados', login: 'enbpar@agente.com', senha: 'agente123', perfil: 'agente', agenteExecutor: 'ENBPar' },
-    { id: 'u_analista_ap', nome: 'Analista Preliminar ENBPar', login: 'AnalistaAP', senha: 'AP@2026', perfil: 'analista_ap' }
-  ];
-
-  const USERS_VERSION = '6';
-  const STORAGE_USERS_VERSION_KEY = 'plataforma_po_usuarios_versao';
-
-  function loadUsuarios(){
-    try {
-      const storedVersion = localStorage.getItem(STORAGE_USERS_VERSION_KEY);
-      const raw = localStorage.getItem(STORAGE_USERS_KEY);
-      if(raw && storedVersion === USERS_VERSION){
-        const parsed = JSON.parse(raw);
-        if(Array.isArray(parsed) && parsed.length) return parsed;
-      }
-    } catch(e){}
-    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(DEFAULT_USERS));
-    localStorage.setItem(STORAGE_USERS_VERSION_KEY, USERS_VERSION);
-    return DEFAULT_USERS;
-  }
-
-  function getSessao(){
-    try {
-      const raw = localStorage.getItem(STORAGE_SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch(e){ return null; }
-  }
+  /* SESSÃO / USUÁRIOS → movidos para o bloco JSONBin no <head> */
 
   const sessao = getSessao();
   if(!sessao){
