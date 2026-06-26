@@ -604,6 +604,11 @@ select{cursor:pointer}
   const filterSearch = document.getElementById('filterSearch');
 
   async function renderTable(){
+    // Mostrar loading enquanto busca no JSONBin
+    poTableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--txt3)">⏳ Carregando programas...</td></tr>';
+    tableWrap.classList.remove('empty');
+    emptyState.classList.remove('visible');
+
     const programas = await loadProgramas();
     const fModelo = filterModelo.value;
     const fStatus = filterStatus.value;
@@ -787,7 +792,7 @@ select{cursor:pointer}
     });
   });
 
-  nextBtn.addEventListener('click', () => {
+  nextBtn.addEventListener('click', async () => {
     if(currentStep === 1 && selectedModel){
       currentStep = 2;
       step1.classList.remove('active');
@@ -796,7 +801,7 @@ select{cursor:pointer}
       stepDots[1].classList.add('active');
       backBtn.style.display = 'inline-flex';
       nextBtn.textContent = 'Criar Programa de Obras';
-      document.getElementById('poFieldCodigo').value = nextCodigo(selectedModel);
+      document.getElementById('poFieldCodigo').value = await nextCodigo(selectedModel);
     } else if(currentStep === 2){
       criarPrograma();
     }
@@ -814,7 +819,7 @@ select{cursor:pointer}
     }
   });
 
-  function criarPrograma(){
+  async function criarPrograma(){
     const nome = document.getElementById('poFieldNome').value.trim() || 'Novo Programa de Obras';
     const codigo = document.getElementById('poFieldCodigo').value;
     const responsavelId = document.getElementById('poFieldAgente').value;
@@ -845,8 +850,13 @@ select{cursor:pointer}
       criadoEm: new Date().toISOString().slice(0,10)
     };
 
-    await addPrograma(programa);
-    window.location.href = `./po_preenchimento.html?modelo=${selectedModel}&id=${id}`;
+    try {
+      await addPrograma(programa);
+      window.location.href = `./po_preenchimento.html?modelo=${selectedModel}&id=${id}`;
+    } catch(e) {
+      console.error('Erro ao criar PO:', e);
+      alert('Erro ao salvar o Programa de Obras. Verifique o console (F12) e tente novamente.');
+    }
   }
 
   function populateAgenteSelect(){
